@@ -2,7 +2,7 @@
 
 A focused macOS app for browsing Safari Reading List by [Marc Köhlbrugge](https://x.com/marckohlbrugge).
 
-![Reading List screenshot](file:///Users/marc/Desktop/CleanShot%202026-02-28%20at%2016.44.24@2x.png)
+![Reading List screenshot](docs/screenshot.png)
 
 Safari makes it very easy to save links for later on macOS and iOS, but there is no great dedicated app experience for browsing a large Reading List later.
 
