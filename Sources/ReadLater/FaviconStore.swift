@@ -23,6 +23,7 @@ enum FaviconPipelineConfiguration {
 struct FaviconImage: View {
     let hostname: String
     let size: CGFloat
+    private static let requestedPixelSize = 128
 
     var body: some View {
         Group {
@@ -67,10 +68,16 @@ struct FaviconImage: View {
             return nil
         }
 
-        if let duckDuckGo = URL(string: "https://icons.duckduckgo.com/ip3/\(host).ico") {
-            return duckDuckGo
+        if var components = URLComponents(string: "https://www.google.com/s2/favicons") {
+            components.queryItems = [
+                URLQueryItem(name: "domain", value: host),
+                URLQueryItem(name: "sz", value: "\(Self.requestedPixelSize)"),
+            ]
+            if let url = components.url {
+                return url
+            }
         }
 
-        return URL(string: "https://\(host)/favicon.ico")
+        return URL(string: "https://icons.duckduckgo.com/ip3/\(host).ico")
     }
 }

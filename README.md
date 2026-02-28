@@ -1,5 +1,9 @@
 # Reading List (Safari Reading List Viewer)
 
+A focused macOS app for browsing Safari Reading List by [Marc Köhlbrugge](https://x.com/marckohlbrugge).
+
+![Reading List screenshot](file:///Users/marc/Desktop/CleanShot%202026-02-28%20at%2016.44.24@2x.png)
+
 Safari makes it very easy to save links for later on macOS and iOS, but there is no great dedicated app experience for browsing a large Reading List later.
 
 This project is meant to be that missing macOS companion: a focused app for rediscovering your saved Safari Reading List items.
@@ -49,6 +53,16 @@ Before using write actions, consider making a backup:
 ```bash
 cp ~/Library/Safari/Bookmarks.plist ~/Library/Safari/Bookmarks.plist.backup.$(date +%Y%m%d-%H%M%S)
 ```
+
+## Demo mode (safe for screenshots)
+
+You can run the app with fake sample data (including emoji-rich titles) for screenshots and demos:
+
+```bash
+swift run "Reading List" --demo-data
+```
+
+In demo mode, the app does not read from or write to Safari's `Bookmarks.plist`.
 
 ## Build and run
 

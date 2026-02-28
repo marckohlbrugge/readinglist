@@ -12,7 +12,13 @@ struct ReadLaterApp: App {
 
         let store = SmartFolderStore()
         _smartFolderStore = StateObject(wrappedValue: store)
-        _viewModel = StateObject(wrappedValue: ReadingListViewModel(smartFolderStore: store))
+        let demoItems = Self.isDemoDataModeEnabled ? DemoReadingListData.makeItems() : nil
+        _viewModel = StateObject(
+            wrappedValue: ReadingListViewModel(
+                smartFolderStore: store,
+                demoItems: demoItems
+            )
+        )
     }
 
     var body: some Scene {
@@ -33,6 +39,20 @@ struct ReadLaterApp: App {
                 .keyboardShortcut("f", modifiers: [.command])
             }
         }
+    }
+
+    private static var isDemoDataModeEnabled: Bool {
+        let arguments = ProcessInfo.processInfo.arguments
+        if arguments.contains("--demo-data") {
+            return true
+        }
+
+        let environment = ProcessInfo.processInfo.environment
+        guard let rawFlag = environment["READING_LIST_DEMO"]?.lowercased() else {
+            return false
+        }
+
+        return ["1", "true", "yes", "on"].contains(rawFlag)
     }
 }
 

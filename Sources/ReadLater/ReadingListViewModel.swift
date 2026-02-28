@@ -47,13 +47,20 @@ final class ReadingListViewModel: ObservableObject {
 
     private let service: SafariReadingListService
     private let smartFolderStore: SmartFolderStore
+    private let demoItems: [ReadingListItem]?
 
     init(
         service: SafariReadingListService = SafariReadingListService(),
-        smartFolderStore: SmartFolderStore
+        smartFolderStore: SmartFolderStore,
+        demoItems: [ReadingListItem]? = nil
     ) {
         self.service = service
         self.smartFolderStore = smartFolderStore
+        self.demoItems = demoItems
+    }
+
+    var isUsingDemoData: Bool {
+        demoItems != nil
     }
 
     var availableSmartFolders: [SmartFolder] {
@@ -117,6 +124,13 @@ final class ReadingListViewModel: ObservableObject {
     }
 
     func reload() {
+        if let demoItems {
+            isLoading = false
+            loadError = nil
+            allItems = demoItems
+            return
+        }
+
         isLoading = true
         loadError = nil
 
@@ -158,6 +172,15 @@ final class ReadingListViewModel: ObservableObject {
         }
 
         updatingReadStateItemIDs.insert(item.id)
+
+        if isUsingDemoData {
+            defer {
+                updatingReadStateItemIDs.remove(item.id)
+            }
+            updateItemReadStateLocally(itemID: item.id, viewedDate: viewedDate)
+            return
+        }
+
         let reader = service
         let targetID = item.id
         let targetURL = item.url
@@ -184,22 +207,30 @@ final class ReadingListViewModel: ObservableObject {
                     }
                 }.value
 
-                guard let index = allItems.firstIndex(where: { $0.id == targetID }) else {
+                guard allItems.contains(where: { $0.id == targetID }) else {
                     return
                 }
 
-                let existing = allItems[index]
-                allItems[index] = ReadingListItem(
-                    title: existing.title,
-                    url: existing.url,
-                    previewText: existing.previewText,
-                    dateAdded: existing.dateAdded,
-                    dateLastViewed: viewedDate
-                )
+                updateItemReadStateLocally(itemID: targetID, viewedDate: viewedDate)
             } catch {
                 loadError = error.localizedDescription
             }
         }
+    }
+
+    private func updateItemReadStateLocally(itemID: ReadingListItem.ID, viewedDate: Date?) {
+        guard let index = allItems.firstIndex(where: { $0.id == itemID }) else {
+            return
+        }
+
+        let existing = allItems[index]
+        allItems[index] = ReadingListItem(
+            title: existing.title,
+            url: existing.url,
+            previewText: existing.previewText,
+            dateAdded: existing.dateAdded,
+            dateLastViewed: viewedDate
+        )
     }
 
     private func items(for selection: FolderSelection) -> [ReadingListItem] {

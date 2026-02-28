@@ -201,12 +201,12 @@ struct ContentView: View {
         }
         .navigationSplitViewColumnWidth(min: 360, ideal: 440)
         .navigationTitle(currentSelectionTitle)
-        .navigationSubtitle("\(unreadCountForSelection) unread")
+        .navigationSubtitle(currentSelectionSubtitle)
         .toolbar { detailToolbarContent }
         .searchable(
             text: $query,
             placement: .toolbar,
-            prompt: "Search title, URL, host, preview text"
+            prompt: "Search links"
         )
     }
 
@@ -324,6 +324,13 @@ struct ContentView: View {
         default:
             return viewModel.title(for: activeSelection)
         }
+    }
+
+    private var currentSelectionSubtitle: String {
+        if viewModel.isUsingDemoData {
+            return "\(unreadCountForSelection) unread • Demo Data"
+        }
+        return "\(unreadCountForSelection) unread"
     }
 
     private var showErrorBinding: Binding<Bool> {
