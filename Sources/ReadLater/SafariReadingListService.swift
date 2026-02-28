@@ -28,10 +28,7 @@ enum ReadingListWriteError: LocalizedError {
 struct SafariReadingListService: Sendable {
     let bookmarksPlistURL: URL
 
-    init(
-        bookmarksPlistURL: URL = FileManager.default.homeDirectoryForCurrentUser
-            .appending(path: "Library/Safari/Bookmarks.plist", directoryHint: .notDirectory)
-    ) {
+    init(bookmarksPlistURL: URL) {
         self.bookmarksPlistURL = bookmarksPlistURL
     }
 

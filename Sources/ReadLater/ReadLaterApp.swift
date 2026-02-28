@@ -4,29 +4,24 @@ import SwiftUI
 @main
 struct ReadLaterApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
-    @StateObject private var smartFolderStore: SmartFolderStore
-    @StateObject private var viewModel: ReadingListViewModel
+    @StateObject private var accessManager = BookmarkAccessManager()
+
+    private let isDemoMode = isDemoDataModeEnabled
 
     init() {
         FaviconPipelineConfiguration.configureSharedPipeline()
-
-        let store = SmartFolderStore()
-        _smartFolderStore = StateObject(wrappedValue: store)
-        let demoItems = Self.isDemoDataModeEnabled ? DemoReadingListData.makeItems() : nil
-        _viewModel = StateObject(
-            wrappedValue: ReadingListViewModel(
-                smartFolderStore: store,
-                demoItems: demoItems
-            )
-        )
     }
 
     var body: some Scene {
         WindowGroup {
-            ContentView(viewModel: viewModel, smartFolderStore: smartFolderStore)
-                .task {
-                    viewModel.reload()
-                }
+            if isDemoMode {
+                DemoContentWrapper()
+            } else {
+                accessGatedView
+                    .task {
+                        accessManager.resolveAccess()
+                    }
+            }
         }
         .defaultSize(width: 1100, height: 720)
         .windowResizability(.contentMinSize)
@@ -41,20 +36,80 @@ struct ReadLaterApp: App {
         }
     }
 
-    private static var isDemoDataModeEnabled: Bool {
-        let arguments = ProcessInfo.processInfo.arguments
-        if arguments.contains("--demo-data") {
-            return true
+    @ViewBuilder
+    private var accessGatedView: some View {
+        switch accessManager.state {
+        case .checking:
+            ProgressView("Checking access\u{2026}")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        case .needsPermission, .failed:
+            BookmarkAccessView(accessManager: accessManager)
+        case let .ready(url):
+            MainContentWrapper(bookmarksPlistURL: url)
         }
-
-        let environment = ProcessInfo.processInfo.environment
-        guard let rawFlag = environment["READING_LIST_DEMO"]?.lowercased() else {
-            return false
-        }
-
-        return ["1", "true", "yes", "on"].contains(rawFlag)
     }
 }
+
+private struct MainContentWrapper: View {
+    let bookmarksPlistURL: URL
+
+    @StateObject private var smartFolderStore = SmartFolderStore()
+    @StateObject private var viewModel: ReadingListViewModel
+
+    init(bookmarksPlistURL: URL) {
+        self.bookmarksPlistURL = bookmarksPlistURL
+        let store = SmartFolderStore()
+        _smartFolderStore = StateObject(wrappedValue: store)
+        let service = SafariReadingListService(bookmarksPlistURL: bookmarksPlistURL)
+        _viewModel = StateObject(
+            wrappedValue: ReadingListViewModel(service: service, smartFolderStore: store)
+        )
+    }
+
+    var body: some View {
+        ContentView(viewModel: viewModel, smartFolderStore: smartFolderStore)
+            .task {
+                viewModel.reload()
+            }
+    }
+}
+
+private struct DemoContentWrapper: View {
+    @StateObject private var smartFolderStore: SmartFolderStore
+    @StateObject private var viewModel: ReadingListViewModel
+
+    init() {
+        let store = SmartFolderStore()
+        _smartFolderStore = StateObject(wrappedValue: store)
+        _viewModel = StateObject(
+            wrappedValue: ReadingListViewModel(
+                smartFolderStore: store,
+                demoItems: DemoReadingListData.makeItems()
+            )
+        )
+    }
+
+    var body: some View {
+        ContentView(viewModel: viewModel, smartFolderStore: smartFolderStore)
+            .task {
+                viewModel.reload()
+            }
+    }
+}
+
+private let isDemoDataModeEnabled: Bool = {
+    let arguments = ProcessInfo.processInfo.arguments
+    if arguments.contains("--demo-data") {
+        return true
+    }
+
+    let environment = ProcessInfo.processInfo.environment
+    guard let rawFlag = environment["READING_LIST_DEMO"]?.lowercased() else {
+        return false
+    }
+
+    return ["1", "true", "yes", "on"].contains(rawFlag)
+}()
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_: Notification) {

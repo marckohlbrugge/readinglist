@@ -49,12 +49,16 @@ final class ReadingListViewModel: ObservableObject {
     private let smartFolderStore: SmartFolderStore
     private let demoItems: [ReadingListItem]?
 
-    init(
-        service: SafariReadingListService = SafariReadingListService(),
-        smartFolderStore: SmartFolderStore,
-        demoItems: [ReadingListItem]? = nil
-    ) {
+    init(service: SafariReadingListService, smartFolderStore: SmartFolderStore) {
         self.service = service
+        self.smartFolderStore = smartFolderStore
+        demoItems = nil
+    }
+
+    init(smartFolderStore: SmartFolderStore, demoItems: [ReadingListItem]) {
+        let dummyURL = FileManager.default.homeDirectoryForCurrentUser
+            .appending(path: "Library/Safari/Bookmarks.plist", directoryHint: .notDirectory)
+        service = SafariReadingListService(bookmarksPlistURL: dummyURL)
         self.smartFolderStore = smartFolderStore
         self.demoItems = demoItems
     }
