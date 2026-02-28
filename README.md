@@ -4,6 +4,10 @@ Safari makes it very easy to save links for later on macOS and iOS, but there is
 
 This project is meant to be that missing macOS companion: a focused app for rediscovering your saved Safari Reading List items.
 
+## Design inspiration
+
+The UI is partly inspired by NetNewsWire and follows traditional macOS design patterns with native controls.
+
 ## What it does
 
 - Imports Safari Reading List data from:
@@ -65,6 +69,16 @@ sudo xcodebuild -license
 
 This is currently a fast-moving source project.  
 I may publish a packaged version later (for example App Store or direct download), but for now the intended way to use it is to build from source yourself.
+
+## Contributions and support
+
+This project is shared as-is while it is being actively built, and should be considered beta software.
+
+- I am currently not accepting pull requests.
+- I may review issues, but I am not committing to act on them.
+- Some issues may be closed without a comment.
+- If you strongly believe something should be addressed, you are still welcome to open an issue.
+- I currently have no plans to provide formal support.
 
 ## License
 
