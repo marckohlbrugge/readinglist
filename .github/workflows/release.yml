@@ -59,11 +59,24 @@ jobs:
       - name: Build
         run: swift build -c release
 
+      - name: Locate app bundle
+        id: bundle
+        run: |
+          # SPM may place the .app at different paths depending on toolchain
+          APP_BUNDLE="$(find .build -name 'Reading List.app' -maxdepth 3 -type d | head -1)"
+          if [[ -z "$APP_BUNDLE" ]]; then
+            echo "ERROR: Reading List.app not found in .build/"
+            find .build -maxdepth 3 -type d | head -30
+            exit 1
+          fi
+          echo "Found app bundle at: $APP_BUNDLE"
+          echo "path=$APP_BUNDLE" >> "$GITHUB_OUTPUT"
+
       - name: Prepare app bundle
         env:
           VERSION: ${{ steps.version.outputs.version }}
+          APP_BUNDLE: ${{ steps.bundle.outputs.path }}
         run: |
-          APP_BUNDLE=".build/Reading List.app"
           PLIST="$APP_BUNDLE/Contents/Info.plist"
 
           # Set version
@@ -73,23 +86,25 @@ jobs:
       - name: Sign app
         env:
           DEVELOPER_ID_APPLICATION: ${{ secrets.DEVELOPER_ID_APPLICATION }}
+          APP_BUNDLE: ${{ steps.bundle.outputs.path }}
         run: |
           codesign --force \
             --sign "$DEVELOPER_ID_APPLICATION" \
             --entitlements Entitlements.plist \
             --options runtime \
             --timestamp \
-            ".build/Reading List.app"
+            "$APP_BUNDLE"
 
-          codesign --verify --strict ".build/Reading List.app"
+          codesign --verify --strict "$APP_BUNDLE"
 
       - name: Notarize app
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
           TEAM_ID: ${{ secrets.TEAM_ID }}
+          APP_BUNDLE: ${{ steps.bundle.outputs.path }}
         run: |
-          ditto -c -k --keepParent ".build/Reading List.app" "ReadingList-notarize.zip"
+          ditto -c -k --keepParent "$APP_BUNDLE" "ReadingList-notarize.zip"
 
           xcrun notarytool submit "ReadingList-notarize.zip" \
             --apple-id "$APPLE_ID" \
@@ -97,16 +112,17 @@ jobs:
             --team-id "$TEAM_ID" \
             --wait
 
-          xcrun stapler staple ".build/Reading List.app"
+          xcrun stapler staple "$APP_BUNDLE"
           rm -f "ReadingList-notarize.zip"
 
       - name: Create DMG
         env:
           VERSION: ${{ steps.version.outputs.version }}
           DEVELOPER_ID_APPLICATION: ${{ secrets.DEVELOPER_ID_APPLICATION }}
+          APP_BUNDLE: ${{ steps.bundle.outputs.path }}
         run: |
           mkdir -p dmg-staging
-          cp -R ".build/Reading List.app" dmg-staging/
+          cp -R "$APP_BUNDLE" dmg-staging/
           ln -s /Applications dmg-staging/Applications
 
           hdiutil create \
@@ -122,8 +138,9 @@ jobs:
       - name: Create ZIP
         env:
           VERSION: ${{ steps.version.outputs.version }}
+          APP_BUNDLE: ${{ steps.bundle.outputs.path }}
         run: |
-          ditto -c -k --keepParent ".build/Reading List.app" "Reading-List-${VERSION}.zip"
+          ditto -c -k --keepParent "$APP_BUNDLE" "Reading-List-${VERSION}.zip"
 
       - name: Create GitHub Release
         env:
