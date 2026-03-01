@@ -18,6 +18,10 @@
 	<string>1.0</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>13.0</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
+	<key>CFBundleIconName</key>
+	<string>AppIcon</string>
 	<key>NSHighResolutionCapable</key>
 	<true/>
 	<key>NSPrincipalClass</key>

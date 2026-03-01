@@ -115,8 +115,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_: Notification) {
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
-        NSApp.applicationIconImage = AppIconFactory.makeAppIcon()
-
         // Ensure the first app window becomes key when launched from terminal.
         DispatchQueue.main.async {
             if let window = NSApp.windows.first {
