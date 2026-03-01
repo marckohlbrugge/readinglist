@@ -81,19 +81,9 @@ jobs:
           cp "$EXECUTABLE" "$APP_BUNDLE/Contents/MacOS/Reading List"
           cp Info.plist "$APP_BUNDLE/Contents/Info.plist"
 
-          # Compile .icon into Assets.car + AppIcon.icns
-          xcrun actool \
-            Resources/AppIcon.icon --app-icon AppIcon \
-            --compile "$APP_BUNDLE/Contents/Resources" \
-            --output-format human-readable-text \
-            --notices --warnings --errors \
-            --output-partial-info-plist /dev/null \
-            --include-all-app-icons \
-            --enable-on-demand-resources NO \
-            --development-region en \
-            --target-device mac \
-            --minimum-deployment-target 26.0 \
-            --platform macosx
+          # Copy pre-compiled icon assets (built locally via actool from AppIcon.icon)
+          cp Resources/AppIcon.icns "$APP_BUNDLE/Contents/Resources/AppIcon.icns"
+          cp Resources/Assets.car "$APP_BUNDLE/Contents/Resources/Assets.car"
 
           # Set version in Info.plist
           /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$APP_BUNDLE/Contents/Info.plist"
