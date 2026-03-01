@@ -2,4 +2,5 @@
 .build/
 .swiftpm/
 ReadLaterURLCache/
+ReadingListURLCache/
 backups/

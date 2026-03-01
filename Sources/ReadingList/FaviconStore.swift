@@ -10,7 +10,7 @@ enum FaviconPipelineConfiguration {
 
     private static let didConfigure: Void = {
         var configuration = ImagePipeline.Configuration.withDataCache(
-            name: "ReadLaterFaviconDataCache",
+            name: "ReadingListFaviconDataCache",
             sizeLimit: 100 * 1024 * 1024
         )
         configuration.imageCache = ImageCache.shared

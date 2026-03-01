@@ -13,8 +13,8 @@ final class SmartFolderStore: ObservableObject {
     private var isLoadingFromDisk = false
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
-    private static let migratedLegacyDateDefaultsKey = "ReadLater.didMigrateLegacyDateDefaults.v2"
-    private static let seededEditableDefaultsKey = "ReadLater.didSeedEditableDefaultLists.v1"
+    private static let migratedLegacyDateDefaultsKey = "ReadingList.didMigrateLegacyDateDefaults.v2"
+    private static let seededEditableDefaultsKey = "ReadingList.didSeedEditableDefaultLists.v1"
 
     init(storageURL: URL? = nil) {
         self.storageURL = storageURL ?? Self.defaultStorageURL()
@@ -124,7 +124,7 @@ final class SmartFolderStore: ObservableObject {
             .appending(path: "Library/Application Support", directoryHint: .isDirectory)
 
         return applicationSupportURL
-            .appending(path: "ReadLater", directoryHint: .isDirectory)
+            .appending(path: "ReadingList", directoryHint: .isDirectory)
             .appending(path: "custom-smart-folders.json", directoryHint: .notDirectory)
     }
 

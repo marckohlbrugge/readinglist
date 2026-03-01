@@ -2,7 +2,7 @@ import AppKit
 import SwiftUI
 
 @main
-struct ReadLaterApp: App {
+struct ReadingListApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var accessManager = BookmarkAccessManager()
 

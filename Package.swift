@@ -2,14 +2,14 @@
 import PackageDescription
 
 let package = Package(
-    name: "ReadLater",
+    name: "ReadingList",
     platforms: [
         .macOS(.v13),
     ],
     products: [
         .executable(
             name: "Reading List",
-            targets: ["ReadLater"]
+            targets: ["ReadingList"]
         ),
     ],
     dependencies: [
@@ -17,7 +17,7 @@ let package = Package(
     ],
     targets: [
         .executableTarget(
-            name: "ReadLater",
+            name: "ReadingList",
             dependencies: [
                 .product(name: "Nuke", package: "Nuke"),
                 .product(name: "NukeUI", package: "Nuke"),
