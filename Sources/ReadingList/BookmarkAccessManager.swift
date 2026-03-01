@@ -9,6 +9,11 @@ final class BookmarkAccessManager: ObservableObject {
         case needsPermission
         case ready(URL)
         case failed(String)
+
+        var isReady: Bool {
+            if case .ready = self { return true }
+            return false
+        }
     }
 
     @Published var state: State = .checking

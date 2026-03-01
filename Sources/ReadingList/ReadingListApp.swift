@@ -33,6 +33,35 @@ struct ReadingListApp: App {
                 }
                 .keyboardShortcut("f", modifiers: [.command])
             }
+            CommandGroup(after: .saveItem) {
+                Button("Back Up Bookmarks\u{2026}") {
+                    backUpBookmarks()
+                }
+                .disabled(!accessManager.state.isReady)
+            }
+        }
+    }
+
+    private func backUpBookmarks() {
+        guard case let .ready(url) = accessManager.state else { return }
+
+        let timestamp = Date().formatted(
+            .iso8601.year().month().day().dateSeparator(.dash)
+        )
+        let panel = NSSavePanel()
+        panel.title = "Back Up Bookmarks"
+        panel.nameFieldStringValue = "Bookmarks.plist.backup.\(timestamp)"
+        panel.directoryURL = FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask).first
+        panel.canCreateDirectories = true
+
+        guard panel.runModal() == .OK, let destination = panel.url else { return }
+
+        do {
+            let data = try Data(contentsOf: url)
+            try data.write(to: destination, options: .atomic)
+        } catch {
+            let alert = NSAlert(error: error)
+            alert.runModal()
         }
     }
 
@@ -55,6 +84,9 @@ private struct MainContentWrapper: View {
 
     @StateObject private var smartFolderStore = SmartFolderStore()
     @StateObject private var viewModel: ReadingListViewModel
+    @State private var isShowingBackupPrompt = false
+
+    private static let didOfferBackupKey = "ReadingList.didOfferInitialBackup"
 
     init(bookmarksPlistURL: URL) {
         self.bookmarksPlistURL = bookmarksPlistURL
@@ -71,6 +103,45 @@ private struct MainContentWrapper: View {
             .task {
                 viewModel.reload()
             }
+            .task {
+                if !UserDefaults.standard.bool(forKey: Self.didOfferBackupKey) {
+                    UserDefaults.standard.set(true, forKey: Self.didOfferBackupKey)
+                    isShowingBackupPrompt = true
+                }
+            }
+            .alert(
+                "Back up your bookmarks?",
+                isPresented: $isShowingBackupPrompt
+            ) {
+                Button("Back Up\u{2026}") {
+                    backUpBookmarks()
+                }
+                .keyboardShortcut(.defaultAction)
+                Button("Skip", role: .cancel) {}
+            } message: {
+                Text("This app can modify Safari's Bookmarks.plist when you mark items as read. We recommend saving a backup first. You can always create one later from File > Back Up Bookmarks.")
+            }
+    }
+
+    private func backUpBookmarks() {
+        let timestamp = Date().formatted(
+            .iso8601.year().month().day().dateSeparator(.dash)
+        )
+        let panel = NSSavePanel()
+        panel.title = "Back Up Bookmarks"
+        panel.nameFieldStringValue = "Bookmarks.plist.backup.\(timestamp)"
+        panel.directoryURL = FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask).first
+        panel.canCreateDirectories = true
+
+        guard panel.runModal() == .OK, let destination = panel.url else { return }
+
+        do {
+            let data = try Data(contentsOf: bookmarksPlistURL)
+            try data.write(to: destination, options: .atomic)
+        } catch {
+            let alert = NSAlert(error: error)
+            alert.runModal()
+        }
     }
 }
 

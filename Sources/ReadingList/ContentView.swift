@@ -199,7 +199,7 @@ struct ContentView: View {
                 }
             }
         }
-        .navigationSplitViewColumnWidth(min: 360, ideal: 440)
+        .navigationSplitViewColumnWidth(min: 360, ideal: 500)
         .navigationTitle(currentSelectionTitle)
         .navigationSubtitle(currentSelectionSubtitle)
         .toolbar { detailToolbarContent }
@@ -314,7 +314,7 @@ struct ContentView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        .navigationSplitViewColumnWidth(min: 420, ideal: 620)
+        .navigationSplitViewColumnWidth(min: 360, ideal: 520)
     }
 
     private var currentSelectionTitle: String {
