@@ -54,7 +54,7 @@ jobs:
           security list-keychains -d user -s "$KEYCHAIN_PATH" $EXISTING_KEYCHAINS
 
       - name: Build
-        run: swift build -c release --arch arm64 --arch x86_64
+        run: swift build -c release
 
       - name: Prepare app bundle
         env:
