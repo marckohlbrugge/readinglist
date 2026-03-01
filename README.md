@@ -8,6 +8,19 @@ Safari makes it very easy to save links for later on macOS and iOS, but there is
 
 This project is meant to be that missing macOS companion: a focused app for rediscovering your saved Safari Reading List items.
 
+## Download
+
+Download the latest version from the [GitHub Releases](../../releases/latest) page.
+
+- **Reading-List-x.x.x.dmg** — open the DMG and drag "Reading List" to your Applications folder.
+- **Reading-List-x.x.x.zip** — unzip and move "Reading List.app" to your Applications folder.
+
+The app is signed and notarized with Apple, so macOS will allow it to run without security warnings.
+
+**Requirements:** macOS 13 (Ventura) or later.
+
+On first launch, the app asks you to select your `~/Library/Safari/Bookmarks.plist` file. You only need to do this once.
+
 ## Design inspiration
 
 The UI is partly inspired by NetNewsWire and follows traditional macOS design patterns with native controls.
@@ -64,7 +77,7 @@ swift run "Reading List" --demo-data
 
 In demo mode, the app does not read from or write to Safari's `Bookmarks.plist`.
 
-## Build and run
+## Build from source
 
 1. Open this folder in Xcode and run the `Reading List` executable product.
 2. Or run from Terminal:
@@ -81,8 +94,7 @@ sudo xcodebuild -license
 
 ## Project status
 
-This is currently a fast-moving source project.  
-I may publish a packaged version later (for example App Store or direct download), but for now the intended way to use it is to build from source yourself.
+This app is under active development and should be considered beta software.
 
 ## Contributions and support
 

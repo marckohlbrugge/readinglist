@@ -1,0 +1,140 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    name: Build, sign, notarize, and release
+    runs-on: macos-15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Extract version from tag
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Import signing certificate
+        env:
+          CERTIFICATE_BASE64: ${{ secrets.DEVELOPER_ID_CERTIFICATE_BASE64 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.DEVELOPER_ID_CERTIFICATE_PASSWORD }}
+        run: |
+          KEYCHAIN_PATH="$RUNNER_TEMP/build.keychain-db"
+          KEYCHAIN_PASSWORD="$(openssl rand -base64 32)"
+          echo "::add-mask::$KEYCHAIN_PASSWORD"
+
+          # Create temporary keychain
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+          # Import certificate
+          CERT_PATH="$RUNNER_TEMP/certificate.p12"
+          echo "$CERTIFICATE_BASE64" | base64 --decode > "$CERT_PATH"
+          security import "$CERT_PATH" \
+            -k "$KEYCHAIN_PATH" \
+            -P "$CERTIFICATE_PASSWORD" \
+            -T /usr/bin/codesign
+          rm -f "$CERT_PATH"
+
+          # Allow codesign to access the keychain
+          security set-key-partition-list \
+            -S apple-tool:,apple:,codesign: \
+            -s -k "$KEYCHAIN_PASSWORD" \
+            "$KEYCHAIN_PATH"
+
+          # Add to search list
+          EXISTING_KEYCHAINS="$(security list-keychains -d user | tr -d '"' | tr '\n' ' ')"
+          security list-keychains -d user -s "$KEYCHAIN_PATH" $EXISTING_KEYCHAINS
+
+      - name: Build
+        run: swift build -c release --arch arm64 --arch x86_64
+
+      - name: Prepare app bundle
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          APP_BUNDLE=".build/Reading List.app"
+          PLIST="$APP_BUNDLE/Contents/Info.plist"
+
+          # Set version
+          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $(date +%Y%m%d%H%M%S)" "$PLIST"
+
+      - name: Sign app
+        env:
+          DEVELOPER_ID_APPLICATION: ${{ secrets.DEVELOPER_ID_APPLICATION }}
+        run: |
+          codesign --force \
+            --sign "$DEVELOPER_ID_APPLICATION" \
+            --entitlements Entitlements.plist \
+            --options runtime \
+            --timestamp \
+            ".build/Reading List.app"
+
+          codesign --verify --strict ".build/Reading List.app"
+
+      - name: Notarize app
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
+          TEAM_ID: ${{ secrets.TEAM_ID }}
+        run: |
+          ditto -c -k --keepParent ".build/Reading List.app" "ReadingList-notarize.zip"
+
+          xcrun notarytool submit "ReadingList-notarize.zip" \
+            --apple-id "$APPLE_ID" \
+            --password "$APPLE_ID_PASSWORD" \
+            --team-id "$TEAM_ID" \
+            --wait
+
+          xcrun stapler staple ".build/Reading List.app"
+          rm -f "ReadingList-notarize.zip"
+
+      - name: Create DMG
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          DEVELOPER_ID_APPLICATION: ${{ secrets.DEVELOPER_ID_APPLICATION }}
+        run: |
+          mkdir -p dmg-staging
+          cp -R ".build/Reading List.app" dmg-staging/
+          ln -s /Applications dmg-staging/Applications
+
+          hdiutil create \
+            -volname "Reading List" \
+            -srcfolder dmg-staging \
+            -ov \
+            -format UDZO \
+            "Reading-List-${VERSION}.dmg"
+
+          codesign --force --sign "$DEVELOPER_ID_APPLICATION" --timestamp "Reading-List-${VERSION}.dmg"
+          rm -rf dmg-staging
+
+      - name: Create ZIP
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          ditto -c -k --keepParent ".build/Reading List.app" "Reading-List-${VERSION}.zip"
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --title "Reading List v${VERSION}" \
+            --generate-notes \
+            "Reading-List-${VERSION}.dmg#Reading List ${VERSION} (DMG)" \
+            "Reading-List-${VERSION}.zip#Reading List ${VERSION} (ZIP)"
+
+      - name: Cleanup keychain
+        if: always()
+        run: |
+          KEYCHAIN_PATH="$RUNNER_TEMP/build.keychain-db"
+          security delete-keychain "$KEYCHAIN_PATH" 2>/dev/null || true
