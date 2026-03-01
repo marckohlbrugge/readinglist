@@ -12,6 +12,8 @@ jobs:
   build-and-release:
     name: Build, sign, notarize, and release
     runs-on: macos-15
+    env:
+      APP_BUNDLE: Reading List.app
     steps:
       - name: Select Xcode
         run: sudo xcode-select -s /Applications/Xcode_26.3.app
@@ -59,34 +61,36 @@ jobs:
       - name: Build
         run: swift build -c release
 
-      - name: Locate app bundle
-        id: bundle
-        run: |
-          # SPM may place the .app at different paths depending on toolchain
-          APP_BUNDLE="$(find .build -name 'Reading List.app' -maxdepth 3 -type d | head -1)"
-          if [[ -z "$APP_BUNDLE" ]]; then
-            echo "ERROR: Reading List.app not found in .build/"
-            find .build -maxdepth 3 -type d | head -30
-            exit 1
-          fi
-          echo "Found app bundle at: $APP_BUNDLE"
-          echo "path=$APP_BUNDLE" >> "$GITHUB_OUTPUT"
-
-      - name: Prepare app bundle
+      - name: Assemble app bundle
         env:
           VERSION: ${{ steps.version.outputs.version }}
-          APP_BUNDLE: ${{ steps.bundle.outputs.path }}
         run: |
-          PLIST="$APP_BUNDLE/Contents/Info.plist"
+          # Find the compiled executable
+          BIN_PATH="$(swift build -c release --show-bin-path)"
+          EXECUTABLE="$BIN_PATH/Reading List"
 
-          # Set version
-          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$PLIST"
-          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $(date +%Y%m%d%H%M%S)" "$PLIST"
+          if [[ ! -f "$EXECUTABLE" ]]; then
+            echo "ERROR: Executable not found at $EXECUTABLE"
+            ls -la "$BIN_PATH/"
+            exit 1
+          fi
+
+          # Assemble .app bundle
+          mkdir -p "$APP_BUNDLE/Contents/MacOS"
+          mkdir -p "$APP_BUNDLE/Contents/Resources"
+          cp "$EXECUTABLE" "$APP_BUNDLE/Contents/MacOS/Reading List"
+          cp Info.plist "$APP_BUNDLE/Contents/Info.plist"
+
+          # Set version in Info.plist
+          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$APP_BUNDLE/Contents/Info.plist"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $(date +%Y%m%d%H%M%S)" "$APP_BUNDLE/Contents/Info.plist"
+
+          echo "App bundle assembled at $APP_BUNDLE"
+          ls -la "$APP_BUNDLE/Contents/MacOS/"
 
       - name: Sign app
         env:
           DEVELOPER_ID_APPLICATION: ${{ secrets.DEVELOPER_ID_APPLICATION }}
-          APP_BUNDLE: ${{ steps.bundle.outputs.path }}
         run: |
           codesign --force \
             --sign "$DEVELOPER_ID_APPLICATION" \
@@ -102,7 +106,6 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
           TEAM_ID: ${{ secrets.TEAM_ID }}
-          APP_BUNDLE: ${{ steps.bundle.outputs.path }}
         run: |
           ditto -c -k --keepParent "$APP_BUNDLE" "ReadingList-notarize.zip"
 
@@ -119,7 +122,6 @@ jobs:
         env:
           VERSION: ${{ steps.version.outputs.version }}
           DEVELOPER_ID_APPLICATION: ${{ secrets.DEVELOPER_ID_APPLICATION }}
-          APP_BUNDLE: ${{ steps.bundle.outputs.path }}
         run: |
           mkdir -p dmg-staging
           cp -R "$APP_BUNDLE" dmg-staging/
@@ -138,7 +140,6 @@ jobs:
       - name: Create ZIP
         env:
           VERSION: ${{ steps.version.outputs.version }}
-          APP_BUNDLE: ${{ steps.bundle.outputs.path }}
         run: |
           ditto -c -k --keepParent "$APP_BUNDLE" "Reading-List-${VERSION}.zip"
 
