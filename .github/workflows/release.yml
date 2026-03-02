@@ -84,6 +84,7 @@ jobs:
           # Copy pre-compiled icon assets (built locally via actool from AppIcon.icon)
           cp Resources/AppIcon.icns "$APP_BUNDLE/Contents/Resources/AppIcon.icns"
           cp Resources/Assets.car "$APP_BUNDLE/Contents/Resources/Assets.car"
+          cp Resources/PrivacyInfo.xcprivacy "$APP_BUNDLE/Contents/Resources/PrivacyInfo.xcprivacy"
 
           # Set version in Info.plist
           /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$APP_BUNDLE/Contents/Info.plist"

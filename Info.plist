@@ -5,7 +5,7 @@
 	<key>CFBundleExecutable</key>
 	<string>Reading List</string>
 	<key>CFBundleIdentifier</key>
-	<string>io.marc.ReadingList</string>
+	<string>com.killbridge.ReadingList</string>
 	<key>CFBundleName</key>
 	<string>Reading List</string>
 	<key>CFBundleDisplayName</key>
@@ -26,5 +26,12 @@
 	<true/>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
+	<key>LSApplicationCategoryType</key>
+	<string>public.app-category.utilities</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoadsInWebContent</key>
+		<true/>
+	</dict>
 </dict>
 </plist>

@@ -85,6 +85,9 @@ build_app() {
     mkdir -p "$STAGING_DIR"
     cp -R "$app_bundle" "$STAGING_DIR/"
 
+    # Copy privacy manifest
+    cp "$PROJECT_DIR/Resources/PrivacyInfo.xcprivacy" "$STAGING_DIR/$APP_NAME.app/Contents/Resources/PrivacyInfo.xcprivacy"
+
     # Update version in Info.plist
     local plist="$STAGING_DIR/$APP_NAME.app/Contents/Info.plist"
     /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$plist"
