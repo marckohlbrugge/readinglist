@@ -4,7 +4,7 @@
 Reading List — The Missing App
 
 ## Subtitle (30 characters max)
-Browse your Safari Read Later
+Browse, Filter, and Search
 
 ## Description
 
