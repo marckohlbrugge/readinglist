@@ -10,14 +10,22 @@
             {
               "appearance" : "dark",
               "value" : {
-                "solid" : "srgb:1.00000,1.00000,1.00000,1.00000"
+                "solid" : "extended-gray:1.00000,1.00000"
+              }
+            },
+            {
+              "appearance" : "tinted",
+              "value" : {
+                "solid" : "extended-gray:1.00000,1.00000"
               }
             }
           ],
-          "image-name" : "bookmark.svg",
-          "name" : "bookmark",
+          "glass" : true,
+          "hidden" : false,
+          "image-name" : "eyeglasses.png",
+          "name" : "eyeglasses",
           "position" : {
-            "scale" : 25,
+            "scale" : 0.5,
             "translation-in-points" : [
               0,
               0
