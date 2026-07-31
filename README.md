@@ -46,6 +46,7 @@ The UI is partly inspired by NetNewsWire and follows traditional macOS design pa
 - Supports read status:
   - `Unread` / `All` / `Viewed` filtering
   - explicit `Mark as Read` / `Mark as Unread` actions
+- Supports sorting by date added (`Newest First` / `Oldest First`)
 - Shows favicons in sidebar and list rows
 - Includes a built-in preview pane and quick actions to open links in Safari
 - Includes right-click context menus for common actions (open, copy link, mark read/unread, etc.)

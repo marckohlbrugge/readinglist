@@ -7,13 +7,14 @@ struct ContentView: View {
     @Environment(\.openURL) private var openURL
     @State private var selectedFolder: FolderSelection? = .all
     @State private var query = ""
-    @State private var hideViewed = true
+    @State private var statusFilter: ReadingStatusFilter = .unread
+    @State private var sortOrder: ReadingListSortOrder = .newestFirst
     @State private var isShowingSmartFolderManager = false
     @State private var filteredItems: [ReadingListItem] = []
     @State private var frequentDomainFolders: [DomainFolder] = []
     @State private var allCountForStatus = 0
     @State private var smartFolderCounts: [String: Int] = [:]
-    @State private var unreadCountForSelection = 0
+    @State private var selectionItemCount = 0
     @State private var visibleItemLimit = 250
     @State private var selectedItemID: ReadingListItem.ID?
     @State private var smartListManagerInitialSelection: UUID?
@@ -59,7 +60,10 @@ struct ContentView: View {
         .onChange(of: query) { _ in
             recomputeSelectionDerivedData(resetVisibleLimit: true)
         }
-        .onChange(of: hideViewed) { _ in
+        .onChange(of: statusFilter) { _ in
+            recomputeAllDerivedData(resetVisibleLimit: true)
+        }
+        .onChange(of: sortOrder) { _ in
             recomputeSelectionDerivedData(resetVisibleLimit: true)
         }
         .alert(
@@ -94,7 +98,7 @@ struct ContentView: View {
             Section("Smart Lists") {
                 NavigationLink(value: FolderSelection.all) {
                     sidebarLabel(
-                        title: "All Unread",
+                        title: allLinksSidebarTitle,
                         icon: "circle.fill",
                         count: allCountForStatus,
                         iconTint: sidebarIconTint(for: .all)
@@ -225,17 +229,23 @@ struct ContentView: View {
             }
             .help("Reload")
 
-            Button {
-                hideViewed.toggle()
-            } label: {
-                Label(
-                    hideViewed ? "Hide Viewed On" : "Hide Viewed Off",
-                    systemImage: hideViewed
-                        ? "line.3.horizontal.decrease.circle.fill"
-                        : "line.3.horizontal.decrease.circle"
-                )
+            Picker("Status", selection: $statusFilter) {
+                ForEach(ReadingStatusFilter.allCases) { filter in
+                    Label(filter.title, systemImage: filter.systemImage)
+                        .tag(filter)
+                }
             }
-            .help(hideViewed ? "Hide viewed items" : "Show viewed items")
+            .pickerStyle(.menu)
+            .help("Filter by read status")
+
+            Picker("Sort", selection: $sortOrder) {
+                ForEach(ReadingListSortOrder.allCases) { order in
+                    Label(order.title, systemImage: order.systemImage)
+                        .tag(order)
+                }
+            }
+            .pickerStyle(.menu)
+            .help("Sort by date added")
 
             Button {
                 openSmartListManager()
@@ -317,20 +327,32 @@ struct ContentView: View {
         .navigationSplitViewColumnWidth(min: 360, ideal: 520)
     }
 
+    private var allLinksSidebarTitle: String {
+        switch statusFilter {
+        case .unread:
+            return "All Unread"
+        case .all:
+            return "All Links"
+        case .viewed:
+            return "All Viewed"
+        }
+    }
+
     private var currentSelectionTitle: String {
         switch activeSelection {
         case .all:
-            return "All Unread"
+            return allLinksSidebarTitle
         default:
             return viewModel.title(for: activeSelection)
         }
     }
 
     private var currentSelectionSubtitle: String {
+        let countLabel = "\(selectionItemCount) \(statusFilter.subtitleNoun)"
         if viewModel.isUsingDemoData {
-            return "\(unreadCountForSelection) unread • Demo Data"
+            return "\(countLabel) • Demo Data"
         }
-        return "\(unreadCountForSelection) unread"
+        return countLabel
     }
 
     private var showErrorBinding: Binding<Bool> {
@@ -429,7 +451,8 @@ struct ContentView: View {
         viewModel.displayedItems(
             for: .domain(hostname),
             query: "",
-            statusFilter: activeStatusFilter
+            statusFilter: statusFilter,
+            sortOrder: sortOrder
         )
     }
 
@@ -549,14 +572,6 @@ struct ContentView: View {
         selectedFolder ?? .all
     }
 
-    private var activeStatusFilter: ReadingStatusFilter {
-        hideViewed ? .unread : .all
-    }
-
-    private var sidebarStatusFilter: ReadingStatusFilter {
-        .unread
-    }
-
     private var visibleItems: [ReadingListItem] {
         Array(filteredItems.prefix(visibleItemLimit))
     }
@@ -597,29 +612,31 @@ struct ContentView: View {
     }
 
     private func recomputeSidebarDerivedData() {
-        allCountForStatus = viewModel.allCount(statusFilter: sidebarStatusFilter)
+        allCountForStatus = viewModel.allCount(statusFilter: statusFilter)
         let folders = viewModel.availableSmartFolders
         smartFolderCounts = Dictionary(uniqueKeysWithValues: folders.map { folder in
-            (folder.id, viewModel.smartFolderCount(folder, statusFilter: sidebarStatusFilter))
+            (folder.id, viewModel.smartFolderCount(folder, statusFilter: statusFilter))
         })
 
         frequentDomainFolders = viewModel.domainFolders(
             minimumCount: minimumDomainCount,
-            statusFilter: sidebarStatusFilter
+            statusFilter: statusFilter
         )
     }
 
     private func recomputeSelectionDerivedData(resetVisibleLimit: Bool) {
-        unreadCountForSelection = viewModel.displayedItems(
+        selectionItemCount = viewModel.displayedItems(
             for: activeSelection,
             query: "",
-            statusFilter: .unread
+            statusFilter: statusFilter,
+            sortOrder: sortOrder
         ).count
 
         filteredItems = viewModel.displayedItems(
             for: activeSelection,
             query: query,
-            statusFilter: activeStatusFilter
+            statusFilter: statusFilter,
+            sortOrder: sortOrder
         )
 
         if resetVisibleLimit {

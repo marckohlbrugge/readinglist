@@ -19,6 +19,28 @@ enum ReadingStatusFilter: String, CaseIterable, Identifiable, Sendable {
         }
     }
 
+    var subtitleNoun: String {
+        switch self {
+        case .unread:
+            return "unread"
+        case .all:
+            return "links"
+        case .viewed:
+            return "viewed"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .unread:
+            return "circle"
+        case .all:
+            return "circle.grid.2x2"
+        case .viewed:
+            return "checkmark.circle"
+        }
+    }
+
     func includes(_ item: ReadingListItem) -> Bool {
         switch self {
         case .unread:
@@ -27,6 +49,31 @@ enum ReadingStatusFilter: String, CaseIterable, Identifiable, Sendable {
             return true
         case .viewed:
             return item.isViewed
+        }
+    }
+}
+
+enum ReadingListSortOrder: String, CaseIterable, Identifiable, Sendable {
+    case newestFirst
+    case oldestFirst
+
+    var id: Self { self }
+
+    var title: String {
+        switch self {
+        case .newestFirst:
+            return "Newest First"
+        case .oldestFirst:
+            return "Oldest First"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .newestFirst:
+            return "arrow.down"
+        case .oldestFirst:
+            return "arrow.up"
         }
     }
 }
@@ -82,20 +129,47 @@ final class ReadingListViewModel: ObservableObject {
     func displayedItems(
         for selection: FolderSelection,
         query: String,
-        statusFilter: ReadingStatusFilter
+        statusFilter: ReadingStatusFilter,
+        sortOrder: ReadingListSortOrder = .newestFirst
     ) -> [ReadingListItem] {
         let base = items(for: selection).filter(statusFilter.includes)
         let searchText = query.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        guard !searchText.isEmpty else {
-            return base
+        let filtered: [ReadingListItem]
+        if searchText.isEmpty {
+            filtered = base
+        } else {
+            filtered = base.filter { item in
+                item.title.localizedCaseInsensitiveContains(searchText) ||
+                    item.url.absoluteString.localizedCaseInsensitiveContains(searchText) ||
+                    item.hostname.localizedCaseInsensitiveContains(searchText) ||
+                    (item.previewText?.localizedCaseInsensitiveContains(searchText) ?? false)
+            }
         }
 
-        return base.filter { item in
-            item.title.localizedCaseInsensitiveContains(searchText) ||
-                item.url.absoluteString.localizedCaseInsensitiveContains(searchText) ||
-                item.hostname.localizedCaseInsensitiveContains(searchText) ||
-                (item.previewText?.localizedCaseInsensitiveContains(searchText) ?? false)
+        return sortedItems(filtered, by: sortOrder)
+    }
+
+    private func sortedItems(
+        _ items: [ReadingListItem],
+        by sortOrder: ReadingListSortOrder
+    ) -> [ReadingListItem] {
+        items.sorted { lhs, rhs in
+            switch (lhs.dateAdded, rhs.dateAdded) {
+            case let (leftDate?, rightDate?):
+                switch sortOrder {
+                case .newestFirst:
+                    return leftDate > rightDate
+                case .oldestFirst:
+                    return leftDate < rightDate
+                }
+            case (.some, .none):
+                return true
+            case (.none, .some):
+                return false
+            case (.none, .none):
+                return lhs.title.localizedCaseInsensitiveCompare(rhs.title) == .orderedAscending
+            }
         }
     }
 

@@ -22,7 +22,7 @@ All source is in `Sources/ReadingList/`. Key layers:
 
 - **SafariReadingListService** — reads/writes Safari's `Bookmarks.plist` (binary plist parsing, no Apple API). Handles fetch, mark-read, mark-unread. This is a `Sendable` struct; heavy work runs on detached tasks.
 - **BookmarkAccessManager** — manages App Sandbox security-scoped bookmark access to the plist. Uses `NSOpenPanel` file picker on first launch; persists access via `UserDefaults` bookmark data.
-- **ReadingListViewModel** — `@MainActor ObservableObject` driving the UI. Holds all items, computes filtered/displayed items by folder selection, search query, and read-status filter.
+- **ReadingListViewModel** — `@MainActor ObservableObject` driving the UI. Holds all items, computes filtered/displayed items by folder selection, search query, read-status filter (`Unread` / `All` / `Viewed`), and sort order (`Newest First` / `Oldest First`).
 - **SmartFolderStore** — persists custom smart folders to `~/Library/Application Support/ReadingList/custom-smart-folders.json`. Seeds default folders (Recently Added, Videos, PDFs) on first run.
 - **SmartFolders** — defines `SmartFolder`, `CustomSmartFolder`, `FolderSelection`, and `AddedDateFilter`. Smart folders match items by hostname set, keyword list, and date filter.
 - **ContentView** — three-column `NavigationSplitView`: sidebar (smart lists + domain folders), item list (with pagination at 250-item pages), and web preview pane.
