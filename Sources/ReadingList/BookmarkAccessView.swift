@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct BookmarkAccessView: View {
-    @ObservedObject var accessManager: BookmarkAccessManager
+    var accessManager: BookmarkAccessManager
 
     var body: some View {
         VStack(spacing: 0) {

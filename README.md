@@ -17,7 +17,7 @@ Download the latest version from the [GitHub Releases](../../releases/latest) pa
 
 The app is signed and notarized with Apple, so macOS will allow it to run without security warnings.
 
-**Requirements:** macOS 13 (Ventura) or later.
+**Requirements:** macOS 14 (Sonoma) or later.
 
 On first launch, the app asks you to select your `~/Library/Safari/Bookmarks.plist` file. You only need to do this once.
 
@@ -47,6 +47,8 @@ The UI is partly inspired by NetNewsWire and follows traditional macOS design pa
   - `Unread` / `All` / `Viewed` filtering
   - explicit `Mark as Read` / `Mark as Unread` actions
 - Supports sorting by date added (`Newest First` / `Oldest First`)
+- Auto-refreshes when Safari adds or changes Reading List items
+- Remembers your status filter and sort order between launches
 - Shows favicons in sidebar and list rows
 - Includes a built-in preview pane and quick actions to open links in Safari
 - Includes right-click context menus for common actions (open, copy link, mark read/unread, etc.)

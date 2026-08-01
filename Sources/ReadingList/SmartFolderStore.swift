@@ -1,8 +1,10 @@
 import Foundation
+import Observation
 
 @MainActor
-final class SmartFolderStore: ObservableObject {
-    @Published var customFolders: [CustomSmartFolder] = [] {
+@Observable
+final class SmartFolderStore {
+    var customFolders: [CustomSmartFolder] = [] {
         didSet {
             guard !isLoadingFromDisk else { return }
             saveToDisk()

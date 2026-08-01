@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct SmartFolderManagerView: View {
-    @ObservedObject var store: SmartFolderStore
+    var store: SmartFolderStore
     @Binding var selectedFolder: FolderSelection?
     var initialSelectedCustomFolderID: UUID? = nil
 
@@ -71,7 +71,7 @@ struct SmartFolderManagerView: View {
             applyPreferredSelectionIfNeeded()
             ensureSelectionIsValid()
         }
-        .onChange(of: store.customFolders.map(\.id)) { _ in
+        .onChange(of: store.customFolders.map(\.id)) {
             ensureSelectionIsValid()
         }
     }

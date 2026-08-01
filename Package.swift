@@ -4,7 +4,7 @@ import PackageDescription
 let package = Package(
     name: "ReadingList",
     platforms: [
-        .macOS(.v13),
+        .macOS(.v14),
     ],
     products: [
         .executable(
@@ -22,6 +22,10 @@ let package = Package(
                 .product(name: "Nuke", package: "Nuke"),
                 .product(name: "NukeUI", package: "Nuke"),
             ]
+        ),
+        .testTarget(
+            name: "ReadingListTests",
+            dependencies: ["ReadingList"]
         ),
     ]
 )

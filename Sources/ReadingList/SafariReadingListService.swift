@@ -32,18 +32,21 @@ struct SafariReadingListService: Sendable {
         self.bookmarksPlistURL = bookmarksPlistURL
     }
 
-    func fetchItems() throws -> [ReadingListItem] {
-        guard FileManager.default.fileExists(atPath: bookmarksPlistURL.path) else {
-            throw ReadingListLoadError.bookmarksFileMissing(bookmarksPlistURL)
-        }
+    func fetchItems() async throws -> [ReadingListItem] {
+        try await Task.detached(priority: .userInitiated) { [self] in
+            try fetchItemsSync()
+        }.value
+    }
 
-        let data = try Data(contentsOf: bookmarksPlistURL)
-        var format = PropertyListSerialization.PropertyListFormat.binary
-        let plist = try PropertyListSerialization.propertyList(from: data, options: [], format: &format)
+    /// Passing a `viewedDate` marks the item as read; passing `nil` marks it as unread.
+    func setReadState(url: URL, dateAdded: Date?, viewedDate: Date?) async throws {
+        try await Task.detached(priority: .userInitiated) { [self] in
+            try setReadStateSync(url: url, dateAdded: dateAdded, viewedDate: viewedDate)
+        }.value
+    }
 
-        guard let root = plist as? [String: Any] else {
-            throw ReadingListLoadError.unsupportedFormat
-        }
+    private func fetchItemsSync() throws -> [ReadingListItem] {
+        let root = try loadPlistRoot()
 
         guard let readingListNode = findReadingListNode(in: root) else {
             return []
@@ -55,18 +58,8 @@ struct SafariReadingListService: Sendable {
         return deduplicateByURL(sorted)
     }
 
-    func markItemAsRead(url: URL, dateAdded: Date?, viewedDate: Date = Date()) throws {
-        guard FileManager.default.fileExists(atPath: bookmarksPlistURL.path) else {
-            throw ReadingListLoadError.bookmarksFileMissing(bookmarksPlistURL)
-        }
-
-        let data = try Data(contentsOf: bookmarksPlistURL)
-        var format = PropertyListSerialization.PropertyListFormat.binary
-        let plist = try PropertyListSerialization.propertyList(from: data, options: [], format: &format)
-
-        guard var root = plist as? [String: Any] else {
-            throw ReadingListLoadError.unsupportedFormat
-        }
+    private func setReadStateSync(url: URL, dateAdded: Date?, viewedDate: Date?) throws {
+        var root = try loadPlistRoot()
 
         let didUpdate = setItemViewedDate(
             in: &root,
@@ -80,41 +73,25 @@ struct SafariReadingListService: Sendable {
 
         let updatedData = try PropertyListSerialization.data(
             fromPropertyList: root,
-            format: format,
+            format: .binary,
             options: 0
         )
         try updatedData.write(to: bookmarksPlistURL, options: .atomic)
     }
 
-    func markItemAsUnread(url: URL, dateAdded: Date?) throws {
+    private func loadPlistRoot() throws -> [String: Any] {
         guard FileManager.default.fileExists(atPath: bookmarksPlistURL.path) else {
             throw ReadingListLoadError.bookmarksFileMissing(bookmarksPlistURL)
         }
 
         let data = try Data(contentsOf: bookmarksPlistURL)
-        var format = PropertyListSerialization.PropertyListFormat.binary
-        let plist = try PropertyListSerialization.propertyList(from: data, options: [], format: &format)
+        let plist = try PropertyListSerialization.propertyList(from: data, options: [], format: nil)
 
-        guard var root = plist as? [String: Any] else {
+        guard let root = plist as? [String: Any] else {
             throw ReadingListLoadError.unsupportedFormat
         }
 
-        let didUpdate = setItemViewedDate(
-            in: &root,
-            targetURLString: url.absoluteString,
-            targetDateAdded: dateAdded,
-            viewedDate: nil
-        )
-        guard didUpdate else {
-            throw ReadingListWriteError.itemNotFound(url)
-        }
-
-        let updatedData = try PropertyListSerialization.data(
-            fromPropertyList: root,
-            format: format,
-            options: 0
-        )
-        try updatedData.write(to: bookmarksPlistURL, options: .atomic)
+        return root
     }
 
     private func findReadingListNode(in node: [String: Any]) -> [String: Any]? {

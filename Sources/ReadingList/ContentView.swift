@@ -2,27 +2,14 @@ import AppKit
 import SwiftUI
 
 struct ContentView: View {
-    @ObservedObject var viewModel: ReadingListViewModel
-    @ObservedObject var smartFolderStore: SmartFolderStore
+    @Bindable var viewModel: ReadingListViewModel
+    var smartFolderStore: SmartFolderStore
     @Environment(\.openURL) private var openURL
-    @State private var selectedFolder: FolderSelection? = .all
-    @State private var query = ""
-    @State private var statusFilter: ReadingStatusFilter = .unread
-    @State private var sortOrder: ReadingListSortOrder = .newestFirst
     @State private var isShowingSmartFolderManager = false
-    @State private var filteredItems: [ReadingListItem] = []
-    @State private var frequentDomainFolders: [DomainFolder] = []
-    @State private var allCountForStatus = 0
-    @State private var smartFolderCounts: [String: Int] = [:]
-    @State private var selectionItemCount = 0
-    @State private var visibleItemLimit = 250
-    @State private var selectedItemID: ReadingListItem.ID?
     @State private var smartListManagerInitialSelection: UUID?
     @State private var pendingOpenURLs: [URL] = []
     @State private var pendingOpenLinksSourceName = ""
     @State private var isShowingOpenLinksConfirmation = false
-    private let minimumDomainCount = 10
-    private let itemsPageSize = 250
     private let openLinksConfirmationThreshold = 15
 
     var body: some View {
@@ -35,44 +22,22 @@ struct ContentView: View {
         }
         .sheet(isPresented: $isShowingSmartFolderManager, onDismiss: {
             smartListManagerInitialSelection = nil
-            validateSelectedFolder()
-            recomputeAllDerivedData(resetVisibleLimit: true)
+            viewModel.smartFoldersDidChange()
         }) {
             SmartFolderManagerView(
                 store: smartFolderStore,
-                selectedFolder: $selectedFolder,
+                selectedFolder: $viewModel.selectedFolder,
                 initialSelectedCustomFolderID: smartListManagerInitialSelection
             )
         }
-        .onAppear {
-            recomputeAllDerivedData(resetVisibleLimit: true)
-        }
-        .onChange(of: viewModel.allItems) { _ in
-            recomputeAllDerivedData(resetVisibleLimit: true)
-        }
-        .onChange(of: smartFolderStore.customFolders) { _ in
-            validateSelectedFolder()
-            recomputeAllDerivedData(resetVisibleLimit: true)
-        }
-        .onChange(of: selectedFolder) { _ in
-            recomputeSelectionDerivedData(resetVisibleLimit: true)
-        }
-        .onChange(of: query) { _ in
-            recomputeSelectionDerivedData(resetVisibleLimit: true)
-        }
-        .onChange(of: statusFilter) { _ in
-            recomputeAllDerivedData(resetVisibleLimit: true)
-        }
-        .onChange(of: sortOrder) { _ in
-            recomputeSelectionDerivedData(resetVisibleLimit: true)
+        .onChange(of: smartFolderStore.customFolders) {
+            viewModel.smartFoldersDidChange()
         }
         .alert(
             "Reading List Error",
-            isPresented: showErrorBinding
+            isPresented: $viewModel.isPresentingLoadError
         ) {
-            Button("OK", role: .cancel) {
-                viewModel.loadError = nil
-            }
+            Button("OK", role: .cancel) {}
         } message: {
             Text(viewModel.loadError ?? "Unknown error")
         }
@@ -94,13 +59,13 @@ struct ContentView: View {
     }
 
     private var sidebarView: some View {
-        List(selection: $selectedFolder) {
+        List(selection: $viewModel.selectedFolder) {
             Section("Smart Lists") {
                 NavigationLink(value: FolderSelection.all) {
                     sidebarLabel(
-                        title: allLinksSidebarTitle,
+                        title: viewModel.statusFilter.allListTitle,
                         icon: "circle.fill",
-                        count: allCountForStatus,
+                        count: viewModel.allCount,
                         iconTint: sidebarIconTint(for: .all)
                     )
                 }
@@ -110,7 +75,7 @@ struct ContentView: View {
                         sidebarLabel(
                             title: folder.displayName,
                             icon: folder.systemImage,
-                            count: smartFolderCounts[folder.id, default: 0],
+                            count: viewModel.smartFolderCounts[folder.id, default: 0],
                             iconTint: sidebarIconTint(for: .smartFolder(folder.id))
                         )
                     }
@@ -121,7 +86,7 @@ struct ContentView: View {
                         sidebarLabel(
                             title: folder.displayName,
                             icon: folder.systemImage,
-                            count: smartFolderCounts[folder.id, default: 0],
+                            count: viewModel.smartFolderCounts[folder.id, default: 0],
                             iconTint: sidebarIconTint(for: .smartFolder(folder.id))
                         )
                     }
@@ -144,11 +109,11 @@ struct ContentView: View {
             }
 
             Section("Websites") {
-                if frequentDomainFolders.isEmpty {
-                    Text("No domains have \(minimumDomainCount)+ links yet.")
+                if viewModel.frequentDomainFolders.isEmpty {
+                    Text("No domains have \(ReadingListViewModel.minimumDomainCount)+ links yet.")
                         .foregroundStyle(.secondary)
                 } else {
-                    ForEach(frequentDomainFolders) { folder in
+                    ForEach(viewModel.frequentDomainFolders) { folder in
                         NavigationLink(value: FolderSelection.domain(folder.hostname)) {
                             domainSidebarLabel(
                                 hostname: folder.hostname,
@@ -178,11 +143,11 @@ struct ContentView: View {
 
     private var detailView: some View {
         Group {
-            if filteredItems.isEmpty {
+            if viewModel.filteredItems.isEmpty {
                 emptyStateView
             } else {
-                List(selection: $selectedItemID) {
-                    ForEach(visibleItems) { item in
+                List(selection: $viewModel.selectedItemID) {
+                    ForEach(viewModel.visibleItems) { item in
                         ReadingListRow(item: item)
                             .tag(item.id as ReadingListItem.ID?)
                             .listRowSeparator(.hidden)
@@ -190,25 +155,25 @@ struct ContentView: View {
                                 itemContextMenu(for: item)
                             }
                             .onAppear {
-                                loadMoreItemsIfNeeded(currentItemID: item.id)
+                                viewModel.loadMoreItemsIfNeeded(currentItemID: item.id)
                             }
                     }
                 }
                 .listStyle(.plain)
-                .onChange(of: selectedItemID) { id in
+                .onChange(of: viewModel.selectedItemID) { _, id in
                     guard let id else {
                         return
                     }
-                    loadMoreItemsIfNeeded(currentItemID: id)
+                    viewModel.loadMoreItemsIfNeeded(currentItemID: id)
                 }
             }
         }
         .navigationSplitViewColumnWidth(min: 360, ideal: 500)
-        .navigationTitle(currentSelectionTitle)
+        .navigationTitle(viewModel.title(for: viewModel.activeSelection))
         .navigationSubtitle(currentSelectionSubtitle)
         .toolbar { detailToolbarContent }
         .searchable(
-            text: $query,
+            text: $viewModel.searchQuery,
             placement: .toolbar,
             prompt: "Search links"
         )
@@ -227,9 +192,10 @@ struct ContentView: View {
             } label: {
                 Label("Reload", systemImage: "arrow.clockwise")
             }
+            .keyboardShortcut("r", modifiers: .command)
             .help("Reload")
 
-            Picker("Status", selection: $statusFilter) {
+            Picker("Status", selection: $viewModel.statusFilter) {
                 ForEach(ReadingStatusFilter.allCases) { filter in
                     Label(filter.title, systemImage: filter.systemImage)
                         .tag(filter)
@@ -238,7 +204,7 @@ struct ContentView: View {
             .pickerStyle(.menu)
             .help("Filter by read status")
 
-            Picker("Sort", selection: $sortOrder) {
+            Picker("Sort", selection: $viewModel.sortOrder) {
                 ForEach(ReadingListSortOrder.allCases) { order in
                     Label(order.title, systemImage: order.systemImage)
                         .tag(order)
@@ -257,7 +223,7 @@ struct ContentView: View {
 
     private var previewView: some View {
         Group {
-            if let selectedItem {
+            if let selectedItem = viewModel.selectedItem {
                 VStack(spacing: 0) {
                     HStack(spacing: 10) {
                         Text(selectedItem.title)
@@ -269,11 +235,7 @@ struct ContentView: View {
                         let isUpdatingReadState = viewModel.updatingReadStateItemIDs.contains(selectedItem.id)
 
                         Button {
-                            if selectedItem.isViewed {
-                                viewModel.markAsUnread(selectedItem)
-                            } else {
-                                viewModel.markAsRead(selectedItem)
-                            }
+                            viewModel.toggleReadState(of: selectedItem)
                         } label: {
                             if isUpdatingReadState {
                                 ProgressView()
@@ -291,8 +253,9 @@ struct ContentView: View {
                         .buttonStyle(.bordered)
                         .controlSize(.regular)
                         .disabled(isUpdatingReadState)
+                        .keyboardShortcut("u", modifiers: [.command, .shift])
                         .accessibilityLabel(selectedItem.isViewed ? "Mark as Unread" : "Mark as Read")
-                        .help(selectedItem.isViewed ? "Mark as unread" : "Mark as read")
+                        .help(selectedItem.isViewed ? "Mark as unread (⇧⌘U)" : "Mark as read (⇧⌘U)")
 
                         Button {
                             openURL(selectedItem.url)
@@ -302,7 +265,8 @@ struct ContentView: View {
                         }
                         .buttonStyle(.bordered)
                         .controlSize(.regular)
-                        .help("Open in Safari")
+                        .keyboardShortcut(.return, modifiers: .command)
+                        .help("Open in Safari (⌘↩)")
                     }
                     .padding(.horizontal, 12)
                     .padding(.vertical, 10)
@@ -327,56 +291,31 @@ struct ContentView: View {
         .navigationSplitViewColumnWidth(min: 360, ideal: 520)
     }
 
-    private var allLinksSidebarTitle: String {
-        switch statusFilter {
-        case .unread:
-            return "All Unread"
-        case .all:
-            return "All Links"
-        case .viewed:
-            return "All Viewed"
-        }
-    }
-
-    private var currentSelectionTitle: String {
-        switch activeSelection {
-        case .all:
-            return allLinksSidebarTitle
-        default:
-            return viewModel.title(for: activeSelection)
-        }
-    }
-
     private var currentSelectionSubtitle: String {
-        let countLabel = "\(selectionItemCount) \(statusFilter.subtitleNoun)"
+        let countLabel = "\(viewModel.selectionItemCount) \(viewModel.statusFilter.subtitleNoun)"
         if viewModel.isUsingDemoData {
             return "\(countLabel) • Demo Data"
         }
         return countLabel
     }
 
-    private var showErrorBinding: Binding<Bool> {
-        Binding(
-            get: { viewModel.loadError != nil },
-            set: { visible in
-                if !visible {
-                    viewModel.loadError = nil
-                }
-            }
-        )
-    }
-
     private var emptyStateView: some View {
         VStack(spacing: 12) {
-            Image(systemName: "magnifyingglass")
-                .font(.system(size: 24))
-                .foregroundStyle(.secondary)
+            if viewModel.isLoading {
+                ProgressView()
+                Text("Loading your reading list\u{2026}")
+                    .foregroundStyle(.secondary)
+            } else {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 24))
+                    .foregroundStyle(.secondary)
 
-            Text("No links found")
-                .font(.headline)
+                Text("No links found")
+                    .font(.headline)
 
-            Text("Try another list, status filter, or search term.")
-                .foregroundStyle(.secondary)
+                Text("Try another list, status filter, or search term.")
+                    .foregroundStyle(.secondary)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -384,7 +323,7 @@ struct ContentView: View {
     private func openSmartListManager(editingCustomFolderID: UUID? = nil) {
         smartListManagerInitialSelection = editingCustomFolderID
         if let editingCustomFolderID {
-            selectedFolder = .smartFolder(CustomSmartFolder.smartFolderID(for: editingCustomFolderID))
+            viewModel.selectedFolder = .smartFolder(CustomSmartFolder.smartFolderID(for: editingCustomFolderID))
         }
         isShowingSmartFolderManager = true
     }
@@ -393,8 +332,8 @@ struct ContentView: View {
         let smartFolderID = CustomSmartFolder.smartFolderID(for: id)
         smartFolderStore.removeFolder(id: id)
 
-        if selectedFolder == .smartFolder(smartFolderID) {
-            selectedFolder = .all
+        if viewModel.selectedFolder == .smartFolder(smartFolderID) {
+            viewModel.selectedFolder = .all
         }
     }
 
@@ -417,11 +356,7 @@ struct ContentView: View {
         Divider()
 
         Button {
-            if item.isViewed {
-                viewModel.markAsUnread(item)
-            } else {
-                viewModel.markAsRead(item)
-            }
+            viewModel.toggleReadState(of: item)
         } label: {
             Label(
                 item.isViewed ? "Mark as Unread" : "Mark as Read",
@@ -451,8 +386,8 @@ struct ContentView: View {
         viewModel.displayedItems(
             for: .domain(hostname),
             query: "",
-            statusFilter: statusFilter,
-            sortOrder: sortOrder
+            statusFilter: viewModel.statusFilter,
+            sortOrder: viewModel.sortOrder
         )
     }
 
@@ -509,7 +444,7 @@ struct ContentView: View {
         count: Int,
         iconTint: Color
     ) -> some View {
-        return HStack(spacing: 10) {
+        HStack(spacing: 10) {
             Image(systemName: icon)
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(iconTint)
@@ -566,164 +501,5 @@ struct ContentView: View {
         case .domain:
             return .gray
         }
-    }
-
-    private var activeSelection: FolderSelection {
-        selectedFolder ?? .all
-    }
-
-    private var visibleItems: [ReadingListItem] {
-        Array(filteredItems.prefix(visibleItemLimit))
-    }
-
-    private var selectedItem: ReadingListItem? {
-        guard let selectedItemID else {
-            return nil
-        }
-        return filteredItems.first(where: { $0.id == selectedItemID })
-    }
-
-    private func validateSelectedFolder() {
-        guard case let .smartFolder(id) = selectedFolder else {
-            return
-        }
-
-        let exists = viewModel.availableSmartFolders.contains(where: { $0.id == id })
-        if !exists {
-            selectedFolder = .all
-        }
-    }
-
-    private func loadMoreItemsIfNeeded(currentItemID: String) {
-        guard
-            let lastVisibleID = visibleItems.last?.id,
-            currentItemID == lastVisibleID,
-            visibleItemLimit < filteredItems.count
-        else {
-            return
-        }
-
-        visibleItemLimit = min(visibleItemLimit + itemsPageSize, filteredItems.count)
-    }
-
-    private func recomputeAllDerivedData(resetVisibleLimit: Bool) {
-        recomputeSidebarDerivedData()
-        recomputeSelectionDerivedData(resetVisibleLimit: resetVisibleLimit)
-    }
-
-    private func recomputeSidebarDerivedData() {
-        allCountForStatus = viewModel.allCount(statusFilter: statusFilter)
-        let folders = viewModel.availableSmartFolders
-        smartFolderCounts = Dictionary(uniqueKeysWithValues: folders.map { folder in
-            (folder.id, viewModel.smartFolderCount(folder, statusFilter: statusFilter))
-        })
-
-        frequentDomainFolders = viewModel.domainFolders(
-            minimumCount: minimumDomainCount,
-            statusFilter: statusFilter
-        )
-    }
-
-    private func recomputeSelectionDerivedData(resetVisibleLimit: Bool) {
-        selectionItemCount = viewModel.displayedItems(
-            for: activeSelection,
-            query: "",
-            statusFilter: statusFilter,
-            sortOrder: sortOrder
-        ).count
-
-        filteredItems = viewModel.displayedItems(
-            for: activeSelection,
-            query: query,
-            statusFilter: statusFilter,
-            sortOrder: sortOrder
-        )
-
-        if resetVisibleLimit {
-            visibleItemLimit = min(itemsPageSize, filteredItems.count)
-        } else {
-            visibleItemLimit = min(max(visibleItemLimit, itemsPageSize), filteredItems.count)
-        }
-
-        if let selectedItemID,
-           !filteredItems.contains(where: { $0.id == selectedItemID })
-        {
-            self.selectedItemID = nil
-        }
-    }
-}
-
-private struct ReadingListRow: View {
-    let item: ReadingListItem
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 10) {
-            if !item.isViewed {
-                UnreadDotBadge()
-                    .padding(.top, 5)
-            } else {
-                Color.clear
-                    .frame(width: 8, height: 8)
-                    .padding(.top, 5)
-            }
-
-            FaviconImage(hostname: item.hostname, size: 36)
-                .padding(.top, 1)
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(item.title)
-                    .font(.headline.weight(.semibold))
-                    .foregroundStyle(.primary)
-                    .lineLimit(2)
-                    .multilineTextAlignment(.leading)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-
-                Text(summaryText)
-                    .font(.body)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(3)
-
-                HStack(spacing: 8) {
-                    Text(displayHostname)
-                    Spacer(minLength: 8)
-                    if let dateAdded = item.dateAdded {
-                        Text(dateAdded.formatted(date: .abbreviated, time: .omitted))
-                    }
-                }
-                .font(.callout.weight(.semibold))
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-            }
-        }
-        .frame(minHeight: 96, alignment: .topLeading)
-        .padding(.horizontal, 10)
-        .padding(.top, 6)
-        .padding(.bottom, 2)
-    }
-
-    private var summaryText: String {
-        if let preview = item.previewText?.trimmingCharacters(in: .whitespacesAndNewlines),
-           !preview.isEmpty
-        {
-            return preview
-        }
-        return item.url.absoluteString
-            .replacingOccurrences(of: "https://", with: "")
-            .replacingOccurrences(of: "http://", with: "")
-    }
-
-    private var displayHostname: String {
-        item.hostname.hasPrefix("www.")
-            ? String(item.hostname.dropFirst(4))
-            : item.hostname
-    }
-}
-
-private struct UnreadDotBadge: View {
-    var body: some View {
-        Circle()
-            .fill(Color.accentColor)
-            .frame(width: 8, height: 8)
-            .accessibilityLabel("Unread")
     }
 }

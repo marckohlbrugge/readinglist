@@ -10,6 +10,7 @@ Reading List is a native macOS app (Swift 6, SwiftUI) for browsing Safari's Read
 
 ```bash
 swift build                          # compile
+swift test                           # run tests (Swift Testing)
 swift run "Reading List"             # run normally
 swift run "Reading List" --demo-data # run with fake data (no plist access)
 ```
@@ -22,7 +23,8 @@ All source is in `Sources/ReadingList/`. Key layers:
 
 - **SafariReadingListService** — reads/writes Safari's `Bookmarks.plist` (binary plist parsing, no Apple API). Handles fetch, mark-read, mark-unread. This is a `Sendable` struct; heavy work runs on detached tasks.
 - **BookmarkAccessManager** — manages App Sandbox security-scoped bookmark access to the plist. Uses `NSOpenPanel` file picker on first launch; persists access via `UserDefaults` bookmark data.
-- **ReadingListViewModel** — `@MainActor ObservableObject` driving the UI. Holds all items, computes filtered/displayed items by folder selection, search query, read-status filter (`Unread` / `All` / `Viewed`), and sort order (`Newest First` / `Oldest First`).
+- **ReadingListViewModel** — `@MainActor @Observable` class driving the UI. Owns all items plus the UI state (folder selection, search query, read-status filter `Unread` / `All` / `Viewed`, sort order `Newest First` / `Oldest First`, pagination, selected item) and recomputes derived data via `didSet` observers. Status filter and sort order persist to `UserDefaults`.
+- **BookmarksFileMonitor** — DispatchSource-based watcher on `Bookmarks.plist` that auto-reloads the view model when Safari (or anything else) changes the file; re-arms after atomic replaces.
 - **SmartFolderStore** — persists custom smart folders to `~/Library/Application Support/ReadingList/custom-smart-folders.json`. Seeds default folders (Recently Added, Videos, PDFs) on first run.
 - **SmartFolders** — defines `SmartFolder`, `CustomSmartFolder`, `FolderSelection`, and `AddedDateFilter`. Smart folders match items by hostname set, keyword list, and date filter.
 - **ContentView** — three-column `NavigationSplitView`: sidebar (smart lists + domain folders), item list (with pagination at 250-item pages), and web preview pane.
@@ -31,7 +33,7 @@ All source is in `Sources/ReadingList/`. Key layers:
 ## Key Conventions
 
 - Swift 6 strict concurrency; `@MainActor` on view models and stores, `Sendable` on services and models.
-- macOS 13+ minimum deployment target.
+- macOS 14+ minimum deployment target.
 - Demo mode (`--demo-data` flag or `READING_LIST_DEMO=1` env var) uses `DemoReadingListData` — no file system access.
 - Read-status writes go directly to Safari's `Bookmarks.plist` (atomic write). This is the only write operation.
 - `ReadingListItem.id` is a composite of URL + dateAdded timestamp to handle duplicate URLs.

@@ -1,9 +1,11 @@
 import AppKit
 import Foundation
+import Observation
 import UniformTypeIdentifiers
 
 @MainActor
-final class BookmarkAccessManager: ObservableObject {
+@Observable
+final class BookmarkAccessManager {
     enum State: Equatable {
         case checking
         case needsPermission
@@ -16,10 +18,10 @@ final class BookmarkAccessManager: ObservableObject {
         }
     }
 
-    @Published var state: State = .checking
+    private(set) var state: State = .checking
 
     private static let bookmarkDataKey = "SafariBookmarksPlistBookmarkData"
-    private var accessedURL: URL?
+    @ObservationIgnored private var accessedURL: URL?
 
     func resolveAccess() {
         guard let data = UserDefaults.standard.data(forKey: Self.bookmarkDataKey) else {

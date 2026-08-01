@@ -1,105 +1,76 @@
-import Combine
 import Foundation
-
-enum ReadingStatusFilter: String, CaseIterable, Identifiable, Sendable {
-    case unread
-    case all
-    case viewed
-
-    var id: Self { self }
-
-    var title: String {
-        switch self {
-        case .unread:
-            return "Unread"
-        case .all:
-            return "All"
-        case .viewed:
-            return "Viewed"
-        }
-    }
-
-    var subtitleNoun: String {
-        switch self {
-        case .unread:
-            return "unread"
-        case .all:
-            return "links"
-        case .viewed:
-            return "viewed"
-        }
-    }
-
-    var systemImage: String {
-        switch self {
-        case .unread:
-            return "circle"
-        case .all:
-            return "circle.grid.2x2"
-        case .viewed:
-            return "checkmark.circle"
-        }
-    }
-
-    func includes(_ item: ReadingListItem) -> Bool {
-        switch self {
-        case .unread:
-            return !item.isViewed
-        case .all:
-            return true
-        case .viewed:
-            return item.isViewed
-        }
-    }
-}
-
-enum ReadingListSortOrder: String, CaseIterable, Identifiable, Sendable {
-    case newestFirst
-    case oldestFirst
-
-    var id: Self { self }
-
-    var title: String {
-        switch self {
-        case .newestFirst:
-            return "Newest First"
-        case .oldestFirst:
-            return "Oldest First"
-        }
-    }
-
-    var systemImage: String {
-        switch self {
-        case .newestFirst:
-            return "arrow.down"
-        case .oldestFirst:
-            return "arrow.up"
-        }
-    }
-}
-
-struct DomainFolder: Identifiable, Sendable {
-    let hostname: String
-    let count: Int
-
-    var id: String { hostname }
-}
+import Observation
 
 @MainActor
-final class ReadingListViewModel: ObservableObject {
-    @Published var allItems: [ReadingListItem] = []
-    @Published var isLoading = false
-    @Published var loadError: String?
-    @Published private(set) var updatingReadStateItemIDs: Set<ReadingListItem.ID> = []
+@Observable
+final class ReadingListViewModel {
+    private(set) var allItems: [ReadingListItem] = []
+    private(set) var isLoading = false
+    private(set) var updatingReadStateItemIDs: Set<ReadingListItem.ID> = []
+    var loadError: String?
+
+    var selectedFolder: FolderSelection? = .all {
+        didSet {
+            guard selectedFolder != oldValue else { return }
+            recomputeSelectionData(resetPagination: true)
+        }
+    }
+
+    var searchQuery = "" {
+        didSet {
+            guard searchQuery != oldValue else { return }
+            recomputeSelectionData(resetPagination: true)
+        }
+    }
+
+    var statusFilter: ReadingStatusFilter {
+        didSet {
+            guard statusFilter != oldValue else { return }
+            UserDefaults.standard.set(statusFilter.rawValue, forKey: Self.statusFilterDefaultsKey)
+            recomputeAllDerivedData(resetPagination: true)
+        }
+    }
+
+    var sortOrder: ReadingListSortOrder {
+        didSet {
+            guard sortOrder != oldValue else { return }
+            UserDefaults.standard.set(sortOrder.rawValue, forKey: Self.sortOrderDefaultsKey)
+            recomputeSelectionData(resetPagination: true)
+        }
+    }
+
+    var selectedItemID: ReadingListItem.ID?
+
+    private(set) var filteredItems: [ReadingListItem] = []
+    private(set) var frequentDomainFolders: [DomainFolder] = []
+    private(set) var allCount = 0
+    private(set) var smartFolderCounts: [String: Int] = [:]
+    private(set) var selectionItemCount = 0
+
+    private var visibleItemLimit = ReadingListViewModel.itemsPageSize
+    private var reloadTask: Task<Void, Never>?
+    private var fileMonitor: BookmarksFileMonitor?
 
     private let service: SafariReadingListService
     private let smartFolderStore: SmartFolderStore
     private let demoItems: [ReadingListItem]?
 
+    static let minimumDomainCount = 10
+    private static let itemsPageSize = 250
+    private static let statusFilterDefaultsKey = "ReadingList.statusFilter"
+    private static let sortOrderDefaultsKey = "ReadingList.sortOrder"
+
     init(service: SafariReadingListService, smartFolderStore: SmartFolderStore) {
         self.service = service
         self.smartFolderStore = smartFolderStore
         demoItems = nil
+        (statusFilter, sortOrder) = Self.restoredFilterAndSort()
+
+        let monitor = BookmarksFileMonitor(url: service.bookmarksPlistURL) { [weak self] in
+            self?.reload()
+        }
+        monitor.start()
+        fileMonitor = monitor
     }
 
     init(smartFolderStore: SmartFolderStore, demoItems: [ReadingListItem]) {
@@ -108,6 +79,16 @@ final class ReadingListViewModel: ObservableObject {
         service = SafariReadingListService(bookmarksPlistURL: dummyURL)
         self.smartFolderStore = smartFolderStore
         self.demoItems = demoItems
+        (statusFilter, sortOrder) = Self.restoredFilterAndSort()
+    }
+
+    private static func restoredFilterAndSort() -> (ReadingStatusFilter, ReadingListSortOrder) {
+        let defaults = UserDefaults.standard
+        let filter = defaults.string(forKey: statusFilterDefaultsKey)
+            .flatMap(ReadingStatusFilter.init(rawValue:)) ?? .unread
+        let sort = defaults.string(forKey: sortOrderDefaultsKey)
+            .flatMap(ReadingListSortOrder.init(rawValue:)) ?? .newestFirst
+        return (filter, sort)
     }
 
     var isUsingDemoData: Bool {
@@ -124,6 +105,30 @@ final class ReadingListViewModel: ObservableObject {
 
     var customSmartFolders: [SmartFolder] {
         smartFolderStore.customSmartFolders
+    }
+
+    var activeSelection: FolderSelection {
+        selectedFolder ?? .all
+    }
+
+    var visibleItems: [ReadingListItem] {
+        Array(filteredItems.prefix(visibleItemLimit))
+    }
+
+    var selectedItem: ReadingListItem? {
+        guard let selectedItemID else {
+            return nil
+        }
+        return filteredItems.first(where: { $0.id == selectedItemID })
+    }
+
+    var isPresentingLoadError: Bool {
+        get { loadError != nil }
+        set {
+            if !newValue {
+                loadError = nil
+            }
+        }
     }
 
     func displayedItems(
@@ -150,6 +155,199 @@ final class ReadingListViewModel: ObservableObject {
         return sortedItems(filtered, by: sortOrder)
     }
 
+    func title(for selection: FolderSelection) -> String {
+        switch selection {
+        case .all:
+            return statusFilter.allListTitle
+        default:
+            return selection.title(using: availableSmartFolders)
+        }
+    }
+
+    func reload() {
+        if let demoItems {
+            isLoading = false
+            loadError = nil
+            allItems = demoItems
+            recomputeAllDerivedData(resetPagination: false)
+            return
+        }
+
+        isLoading = true
+        loadError = nil
+
+        reloadTask?.cancel()
+        reloadTask = Task {
+            do {
+                let items = try await service.fetchItems()
+                guard !Task.isCancelled else { return }
+                allItems = items
+                recomputeAllDerivedData(resetPagination: false)
+                isLoading = false
+            } catch is CancellationError {
+                // A newer reload replaced this one.
+            } catch {
+                guard !Task.isCancelled else { return }
+                isLoading = false
+                loadError = error.localizedDescription
+            }
+        }
+    }
+
+    func smartFoldersDidChange() {
+        validateSelectedFolder()
+        recomputeAllDerivedData(resetPagination: true)
+    }
+
+    func loadMoreItemsIfNeeded(currentItemID: ReadingListItem.ID) {
+        guard
+            let lastVisibleID = visibleItems.last?.id,
+            currentItemID == lastVisibleID,
+            visibleItemLimit < filteredItems.count
+        else {
+            return
+        }
+
+        visibleItemLimit = min(visibleItemLimit + Self.itemsPageSize, filteredItems.count)
+    }
+
+    func markAsRead(_ item: ReadingListItem) {
+        guard !item.isViewed else {
+            return
+        }
+        setReadState(of: item, viewedDate: Date())
+    }
+
+    func markAsUnread(_ item: ReadingListItem) {
+        guard item.isViewed else {
+            return
+        }
+        setReadState(of: item, viewedDate: nil)
+    }
+
+    func toggleReadState(of item: ReadingListItem) {
+        if item.isViewed {
+            markAsUnread(item)
+        } else {
+            markAsRead(item)
+        }
+    }
+
+    private func setReadState(of item: ReadingListItem, viewedDate: Date?) {
+        guard !updatingReadStateItemIDs.contains(item.id) else {
+            return
+        }
+
+        updatingReadStateItemIDs.insert(item.id)
+
+        if isUsingDemoData {
+            defer {
+                updatingReadStateItemIDs.remove(item.id)
+            }
+            applyLocalReadState(itemID: item.id, viewedDate: viewedDate)
+            return
+        }
+
+        Task {
+            defer {
+                updatingReadStateItemIDs.remove(item.id)
+            }
+
+            do {
+                try await service.setReadState(
+                    url: item.url,
+                    dateAdded: item.dateAdded,
+                    viewedDate: viewedDate
+                )
+                applyLocalReadState(itemID: item.id, viewedDate: viewedDate)
+            } catch {
+                loadError = error.localizedDescription
+            }
+        }
+    }
+
+    private func applyLocalReadState(itemID: ReadingListItem.ID, viewedDate: Date?) {
+        guard let index = allItems.firstIndex(where: { $0.id == itemID }) else {
+            return
+        }
+
+        let existing = allItems[index]
+        allItems[index] = ReadingListItem(
+            title: existing.title,
+            url: existing.url,
+            previewText: existing.previewText,
+            dateAdded: existing.dateAdded,
+            dateLastViewed: viewedDate
+        )
+        recomputeAllDerivedData(resetPagination: false)
+    }
+
+    private func validateSelectedFolder() {
+        guard case let .smartFolder(id) = selectedFolder else {
+            return
+        }
+
+        let exists = availableSmartFolders.contains(where: { $0.id == id })
+        if !exists {
+            selectedFolder = .all
+        }
+    }
+
+    private func recomputeAllDerivedData(resetPagination: Bool) {
+        let statusFilter = statusFilter
+        allCount = allItems.lazy.filter(statusFilter.includes).count
+
+        let folders = availableSmartFolders
+        smartFolderCounts = Dictionary(uniqueKeysWithValues: folders.map { folder in
+            let count = allItems.lazy.filter {
+                folder.matches(item: $0) && statusFilter.includes($0)
+            }.count
+            return (folder.id, count)
+        })
+
+        let source = allItems.filter(statusFilter.includes)
+        let grouped = Dictionary(grouping: source, by: \.hostname)
+        frequentDomainFolders = grouped
+            .map { DomainFolder(hostname: $0.key, count: $0.value.count) }
+            .filter { $0.count >= Self.minimumDomainCount }
+            .sorted { lhs, rhs in
+                if lhs.count != rhs.count {
+                    return lhs.count > rhs.count
+                }
+                return lhs.hostname.localizedCaseInsensitiveCompare(rhs.hostname) == .orderedAscending
+            }
+
+        recomputeSelectionData(resetPagination: resetPagination)
+    }
+
+    private func recomputeSelectionData(resetPagination: Bool) {
+        selectionItemCount = displayedItems(
+            for: activeSelection,
+            query: "",
+            statusFilter: statusFilter,
+            sortOrder: sortOrder
+        ).count
+
+        filteredItems = displayedItems(
+            for: activeSelection,
+            query: searchQuery,
+            statusFilter: statusFilter,
+            sortOrder: sortOrder
+        )
+
+        if resetPagination {
+            visibleItemLimit = min(Self.itemsPageSize, filteredItems.count)
+        } else {
+            visibleItemLimit = min(max(visibleItemLimit, Self.itemsPageSize), filteredItems.count)
+        }
+
+        if let selectedItemID,
+           !filteredItems.contains(where: { $0.id == selectedItemID })
+        {
+            self.selectedItemID = nil
+        }
+    }
+
     private func sortedItems(
         _ items: [ReadingListItem],
         by sortOrder: ReadingListSortOrder
@@ -171,144 +369,6 @@ final class ReadingListViewModel: ObservableObject {
                 return lhs.title.localizedCaseInsensitiveCompare(rhs.title) == .orderedAscending
             }
         }
-    }
-
-    func domainFolders(minimumCount: Int, statusFilter: ReadingStatusFilter) -> [DomainFolder] {
-        let source = allItems.filter(statusFilter.includes)
-        let grouped = Dictionary(grouping: source, by: \.hostname)
-        return grouped
-            .map { DomainFolder(hostname: $0.key, count: $0.value.count) }
-            .filter { $0.count >= minimumCount }
-            .sorted { lhs, rhs in
-                if lhs.count != rhs.count {
-                    return lhs.count > rhs.count
-                }
-                return lhs.hostname.localizedCaseInsensitiveCompare(rhs.hostname) == .orderedAscending
-            }
-    }
-
-    func title(for selection: FolderSelection) -> String {
-        selection.title(using: availableSmartFolders)
-    }
-
-    func allCount(statusFilter: ReadingStatusFilter) -> Int {
-        allItems.lazy.filter(statusFilter.includes).count
-    }
-
-    func smartFolderCount(_ folder: SmartFolder, statusFilter: ReadingStatusFilter) -> Int {
-        allItems.lazy.filter {
-            folder.matches(item: $0) && statusFilter.includes($0)
-        }.count
-    }
-
-    func reload() {
-        if let demoItems {
-            isLoading = false
-            loadError = nil
-            allItems = demoItems
-            return
-        }
-
-        isLoading = true
-        loadError = nil
-
-        let reader = service
-
-        Task {
-            do {
-                let items = try await Task.detached(priority: .userInitiated) {
-                    try reader.fetchItems()
-                }.value
-
-                isLoading = false
-                allItems = items
-            } catch {
-                isLoading = false
-                loadError = error.localizedDescription
-                allItems = []
-            }
-        }
-    }
-
-    func markAsRead(_ item: ReadingListItem) {
-        guard !item.isViewed else {
-            return
-        }
-        updateReadState(for: item, viewedDate: Date())
-    }
-
-    func markAsUnread(_ item: ReadingListItem) {
-        guard item.isViewed else {
-            return
-        }
-        updateReadState(for: item, viewedDate: nil)
-    }
-
-    private func updateReadState(for item: ReadingListItem, viewedDate: Date?) {
-        guard !updatingReadStateItemIDs.contains(item.id) else {
-            return
-        }
-
-        updatingReadStateItemIDs.insert(item.id)
-
-        if isUsingDemoData {
-            defer {
-                updatingReadStateItemIDs.remove(item.id)
-            }
-            updateItemReadStateLocally(itemID: item.id, viewedDate: viewedDate)
-            return
-        }
-
-        let reader = service
-        let targetID = item.id
-        let targetURL = item.url
-        let targetDateAdded = item.dateAdded
-
-        Task {
-            defer {
-                updatingReadStateItemIDs.remove(targetID)
-            }
-
-            do {
-                try await Task.detached(priority: .userInitiated) {
-                    if let viewedDate {
-                        try reader.markItemAsRead(
-                            url: targetURL,
-                            dateAdded: targetDateAdded,
-                            viewedDate: viewedDate
-                        )
-                    } else {
-                        try reader.markItemAsUnread(
-                            url: targetURL,
-                            dateAdded: targetDateAdded
-                        )
-                    }
-                }.value
-
-                guard allItems.contains(where: { $0.id == targetID }) else {
-                    return
-                }
-
-                updateItemReadStateLocally(itemID: targetID, viewedDate: viewedDate)
-            } catch {
-                loadError = error.localizedDescription
-            }
-        }
-    }
-
-    private func updateItemReadStateLocally(itemID: ReadingListItem.ID, viewedDate: Date?) {
-        guard let index = allItems.firstIndex(where: { $0.id == itemID }) else {
-            return
-        }
-
-        let existing = allItems[index]
-        allItems[index] = ReadingListItem(
-            title: existing.title,
-            url: existing.url,
-            previewText: existing.previewText,
-            dateAdded: existing.dateAdded,
-            dateLastViewed: viewedDate
-        )
     }
 
     private func items(for selection: FolderSelection) -> [ReadingListItem] {
