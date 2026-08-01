@@ -5,6 +5,7 @@ import SwiftUI
 struct ReadingListApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var accessManager = BookmarkAccessManager()
+    @State private var smartFolderStore = SmartFolderStore()
 
     private let isDemoMode = isDemoDataModeEnabled
 
@@ -15,7 +16,7 @@ struct ReadingListApp: App {
     var body: some Scene {
         WindowGroup {
             if isDemoMode {
-                DemoContentWrapper()
+                DemoContentWrapper(smartFolderStore: smartFolderStore)
             } else {
                 accessGatedView
                     .task {
@@ -42,6 +43,11 @@ struct ReadingListApp: App {
                 .disabled(!accessManager.state.isReady)
             }
         }
+
+        Settings {
+            SettingsView(store: smartFolderStore, accessManager: accessManager)
+        }
+        .windowResizability(.contentSize)
     }
 
     @ViewBuilder
@@ -53,7 +59,8 @@ struct ReadingListApp: App {
         case .needsPermission, .failed:
             BookmarkAccessView(accessManager: accessManager)
         case let .ready(url):
-            MainContentWrapper(bookmarksPlistURL: url)
+            MainContentWrapper(bookmarksPlistURL: url, smartFolderStore: smartFolderStore)
+                .id(url)
         }
     }
 }

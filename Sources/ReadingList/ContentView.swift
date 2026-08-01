@@ -5,8 +5,7 @@ struct ContentView: View {
     @Bindable var viewModel: ReadingListViewModel
     var smartFolderStore: SmartFolderStore
     @Environment(\.openURL) private var openURL
-    @State private var isShowingSmartFolderManager = false
-    @State private var smartListManagerInitialSelection: UUID?
+    @Environment(\.openSettings) private var openSettings
     @State private var pendingOpenURLs: [URL] = []
     @State private var pendingOpenLinksSourceName = ""
     @State private var isShowingOpenLinksConfirmation = false
@@ -19,16 +18,6 @@ struct ContentView: View {
             detailView
         } detail: {
             previewView
-        }
-        .sheet(isPresented: $isShowingSmartFolderManager, onDismiss: {
-            smartListManagerInitialSelection = nil
-            viewModel.smartFoldersDidChange()
-        }) {
-            SmartFolderManagerView(
-                store: smartFolderStore,
-                selectedFolder: $viewModel.selectedFolder,
-                initialSelectedCustomFolderID: smartListManagerInitialSelection
-            )
         }
         .onChange(of: smartFolderStore.customFolders) {
             viewModel.smartFoldersDidChange()
@@ -93,7 +82,8 @@ struct ContentView: View {
                     .contextMenu {
                         if let customFolderID = CustomSmartFolder.customFolderID(from: folder.id) {
                             Button {
-                                openSmartListManager(editingCustomFolderID: customFolderID)
+                                smartFolderStore.pendingEditFolderID = customFolderID
+                                openSettings()
                             } label: {
                                 Label("Edit Smart List", systemImage: "pencil")
                             }
@@ -195,29 +185,31 @@ struct ContentView: View {
             .keyboardShortcut("r", modifiers: .command)
             .help("Reload")
 
-            Picker("Status", selection: $viewModel.statusFilter) {
-                ForEach(ReadingStatusFilter.allCases) { filter in
-                    Label(filter.title, systemImage: filter.systemImage)
-                        .tag(filter)
+            Menu {
+                Picker("Status", selection: $viewModel.statusFilter) {
+                    ForEach(ReadingStatusFilter.allCases) { filter in
+                        Text(filter.title)
+                            .tag(filter)
+                    }
                 }
+                .pickerStyle(.inline)
+            } label: {
+                Label("Filter by Status", systemImage: "line.3.horizontal.decrease.circle")
             }
-            .pickerStyle(.menu)
             .help("Filter by read status")
 
-            Picker("Sort", selection: $viewModel.sortOrder) {
-                ForEach(ReadingListSortOrder.allCases) { order in
-                    Label(order.title, systemImage: order.systemImage)
-                        .tag(order)
+            Menu {
+                Picker("Sort", selection: $viewModel.sortOrder) {
+                    ForEach(ReadingListSortOrder.allCases) { order in
+                        Text(order.title)
+                            .tag(order)
+                    }
                 }
-            }
-            .pickerStyle(.menu)
-            .help("Sort by date added")
-
-            Button {
-                openSmartListManager()
+                .pickerStyle(.inline)
             } label: {
-                Label("Manage Smart Lists", systemImage: "slider.horizontal.3")
+                Label("Sort by Date", systemImage: "arrow.up.arrow.down")
             }
+            .help("Sort by date added")
         }
     }
 
@@ -318,14 +310,6 @@ struct ContentView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-
-    private func openSmartListManager(editingCustomFolderID: UUID? = nil) {
-        smartListManagerInitialSelection = editingCustomFolderID
-        if let editingCustomFolderID {
-            viewModel.selectedFolder = .smartFolder(CustomSmartFolder.smartFolderID(for: editingCustomFolderID))
-        }
-        isShowingSmartFolderManager = true
     }
 
     private func deleteCustomSmartList(id: UUID) {
@@ -488,16 +472,7 @@ struct ContentView: View {
             guard let folder = viewModel.availableSmartFolders.first(where: { $0.id == id }) else {
                 return .blue
             }
-            switch folder.systemImage {
-            case "clock.fill":
-                return .orange
-            case "play.rectangle.fill":
-                return .red
-            case "doc.fill":
-                return .indigo
-            default:
-                return .blue
-            }
+            return SmartFolderIconPalette.tint(for: folder.systemImage)
         case .domain:
             return .gray
         }

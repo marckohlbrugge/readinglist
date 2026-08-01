@@ -2,20 +2,19 @@ import SwiftUI
 
 struct MainContentWrapper: View {
     let bookmarksPlistURL: URL
+    let smartFolderStore: SmartFolderStore
 
-    @State private var smartFolderStore: SmartFolderStore
     @State private var viewModel: ReadingListViewModel
     @State private var isShowingBackupPrompt = false
 
     private static let didOfferBackupKey = "ReadingList.didOfferInitialBackup"
 
-    init(bookmarksPlistURL: URL) {
+    init(bookmarksPlistURL: URL, smartFolderStore: SmartFolderStore) {
         self.bookmarksPlistURL = bookmarksPlistURL
-        let store = SmartFolderStore()
-        _smartFolderStore = State(initialValue: store)
+        self.smartFolderStore = smartFolderStore
         let service = SafariReadingListService(bookmarksPlistURL: bookmarksPlistURL)
         _viewModel = State(
-            initialValue: ReadingListViewModel(service: service, smartFolderStore: store)
+            initialValue: ReadingListViewModel(service: service, smartFolderStore: smartFolderStore)
         )
     }
 

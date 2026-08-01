@@ -26,6 +26,7 @@ All source is in `Sources/ReadingList/`. Key layers:
 - **ReadingListViewModel** — `@MainActor @Observable` class driving the UI. Owns all items plus the UI state (folder selection, search query, read-status filter `Unread` / `All` / `Viewed`, sort order `Newest First` / `Oldest First`, pagination, selected item) and recomputes derived data via `didSet` observers. Status filter and sort order persist to `UserDefaults`.
 - **BookmarksFileMonitor** — DispatchSource-based watcher on `Bookmarks.plist` that auto-reloads the view model when Safari (or anything else) changes the file; re-arms after atomic replaces.
 - **SmartFolderStore** — persists custom smart folders to `~/Library/Application Support/ReadingList/custom-smart-folders.json`. Seeds default folders (Recently Added, Videos, PDFs) on first run.
+- **SettingsView** — standard tabbed Settings scene (⌘,): General (bookmarks file, backup) and Smart Lists (SmartFolderManagerView). The sidebar "Edit Smart List" context menu opens it via `openSettings` with `SmartFolderStore.pendingEditFolderID`.
 - **SmartFolders** — defines `SmartFolder`, `CustomSmartFolder`, `FolderSelection`, and `AddedDateFilter`. Smart folders match items by hostname set, keyword list, and date filter.
 - **ContentView** — three-column `NavigationSplitView`: sidebar (smart lists + domain folders), item list (with pagination at 250-item pages), and web preview pane.
 - **FaviconStore** — uses Nuke/NukeUI for favicon loading via Google's favicon service, with a 100 MB disk cache.

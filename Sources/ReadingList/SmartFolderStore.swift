@@ -11,6 +11,9 @@ final class SmartFolderStore {
         }
     }
 
+    /// Set before opening Settings to preselect a folder for editing.
+    var pendingEditFolderID: UUID?
+
     private let storageURL: URL
     private var isLoadingFromDisk = false
     private let encoder: JSONEncoder

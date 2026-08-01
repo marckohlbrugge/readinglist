@@ -1,15 +1,15 @@
 import SwiftUI
 
 struct DemoContentWrapper: View {
-    @State private var smartFolderStore: SmartFolderStore
+    let smartFolderStore: SmartFolderStore
+
     @State private var viewModel: ReadingListViewModel
 
-    init() {
-        let store = SmartFolderStore()
-        _smartFolderStore = State(initialValue: store)
+    init(smartFolderStore: SmartFolderStore) {
+        self.smartFolderStore = smartFolderStore
         _viewModel = State(
             initialValue: ReadingListViewModel(
-                smartFolderStore: store,
+                smartFolderStore: smartFolderStore,
                 demoItems: DemoReadingListData.makeItems()
             )
         )

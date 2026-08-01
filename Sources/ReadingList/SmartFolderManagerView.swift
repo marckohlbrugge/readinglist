@@ -2,77 +2,103 @@ import SwiftUI
 
 struct SmartFolderManagerView: View {
     var store: SmartFolderStore
-    @Binding var selectedFolder: FolderSelection?
-    var initialSelectedCustomFolderID: UUID? = nil
 
-    @Environment(\.dismiss) private var dismiss
     @State private var selectedCustomFolderID: UUID?
-    @State private var didApplyInitialSelection = false
 
     var body: some View {
-        NavigationSplitView {
-            List(selection: $selectedCustomFolderID) {
-                ForEach(store.customFolders) { folder in
-                    Label(folder.displayName, systemImage: folder.iconSystemName)
-                        .tag(folder.id as UUID?)
-                }
-                .onDelete(perform: deleteFolders)
-            }
-            .navigationTitle("Smart Lists")
-            .toolbar {
-                ToolbarItemGroup {
-                    Button {
-                        addFolder()
-                    } label: {
-                        Label("Add Smart List", systemImage: "plus")
-                    }
-
-                    Button {
-                        restoreDefaultLists()
-                    } label: {
-                        Label("Restore Default Lists", systemImage: "arrow.counterclockwise")
-                    }
-
-                    Button {
-                        deleteSelectedFolder()
-                    } label: {
-                        Label("Delete Smart List", systemImage: "trash")
-                    }
-                    .disabled(selectedCustomFolderID == nil)
-                }
-            }
-        } detail: {
-            if let folderBinding = selectedFolderBinding {
-                SmartFolderEditor(folder: folderBinding) {
-                    deleteSelectedFolder()
-                }
-            } else {
-                VStack(spacing: 10) {
-                    Image(systemName: "line.3.horizontal.decrease.circle.fill")
-                        .font(.system(size: 24))
-                        .foregroundStyle(.secondary)
-                    Text("Select or create a smart list")
-                        .font(.headline)
-                    Text("Saved smart lists can match hostnames, keywords, and added-date ranges.")
-                        .foregroundStyle(.secondary)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
+        HStack(spacing: 0) {
+            sidebar
+            Divider()
+            detail
         }
-        .frame(minWidth: 860, minHeight: 520)
-        .toolbar {
-            ToolbarItem(placement: .cancellationAction) {
-                Button("Done") {
-                    dismiss()
-                }
-            }
-        }
+        .frame(width: 640, height: 420)
+        .navigationTitle("Smart Lists")
         .onAppear {
-            applyPreferredSelectionIfNeeded()
+            applyPendingEditSelection()
             ensureSelectionIsValid()
+        }
+        .onChange(of: store.pendingEditFolderID) {
+            applyPendingEditSelection()
         }
         .onChange(of: store.customFolders.map(\.id)) {
             ensureSelectionIsValid()
+        }
+    }
+
+    private var sidebar: some View {
+        VStack(spacing: 0) {
+            List(selection: $selectedCustomFolderID) {
+                ForEach(store.customFolders) { folder in
+                    HStack(spacing: 8) {
+                        SmartFolderIconTile(systemImage: folder.iconSystemName)
+                        Text(folder.displayName)
+                            .lineLimit(1)
+                    }
+                    .tag(folder.id as UUID?)
+                }
+            }
+
+            Divider()
+
+            HStack(spacing: 4) {
+                Button {
+                    addFolder()
+                } label: {
+                    Label("Add Smart List", systemImage: "plus")
+                        .labelStyle(.iconOnly)
+                        .frame(width: 20, height: 20)
+                }
+                .help("Add a smart list")
+
+                Button {
+                    deleteSelectedFolder()
+                } label: {
+                    Label("Delete Smart List", systemImage: "minus")
+                        .labelStyle(.iconOnly)
+                        .frame(width: 20, height: 20)
+                }
+                .disabled(selectedCustomFolderID == nil)
+                .help("Delete the selected smart list")
+
+                Spacer()
+
+                Menu {
+                    Button("Restore Default Lists") {
+                        restoreDefaultLists()
+                    }
+                } label: {
+                    Label("More", systemImage: "ellipsis.circle")
+                        .labelStyle(.iconOnly)
+                }
+                .menuIndicator(.hidden)
+                .fixedSize()
+                .help("More options")
+            }
+            .buttonStyle(.borderless)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+        }
+        .frame(width: 200)
+    }
+
+    @ViewBuilder
+    private var detail: some View {
+        if let folderBinding = selectedFolderBinding {
+            SmartFolderEditor(folder: folderBinding)
+        } else {
+            VStack(spacing: 10) {
+                Image(systemName: "line.3.horizontal.decrease.circle.fill")
+                    .font(.system(size: 24))
+                    .foregroundStyle(.secondary)
+                Text("Select or create a smart list")
+                    .font(.headline)
+                Text("Smart lists can match hostnames, keywords, and added-date ranges.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+            .padding()
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 
@@ -99,9 +125,7 @@ struct SmartFolderManagerView: View {
     }
 
     private func addFolder() {
-        let newID = store.addFolder()
-        selectedCustomFolderID = newID
-        selectedFolder = .smartFolder(CustomSmartFolder.smartFolderID(for: newID))
+        selectedCustomFolderID = store.addFolder()
     }
 
     private func restoreDefaultLists() {
@@ -112,16 +136,8 @@ struct SmartFolderManagerView: View {
            store.customFolders.contains(where: { $0.id == previousSelection })
         {
             selectedCustomFolderID = previousSelection
-            selectedFolder = .smartFolder(CustomSmartFolder.smartFolderID(for: previousSelection))
-            return
-        }
-
-        if let firstID = store.customFolders.first?.id {
-            selectedCustomFolderID = firstID
-            selectedFolder = .smartFolder(CustomSmartFolder.smartFolderID(for: firstID))
         } else {
-            selectedCustomFolderID = nil
-            selectedFolder = .all
+            selectedCustomFolderID = store.customFolders.first?.id
         }
     }
 
@@ -131,30 +147,6 @@ struct SmartFolderManagerView: View {
         }
 
         store.removeFolder(id: selectedCustomFolderID)
-
-        if case let .smartFolder(id) = selectedFolder,
-           id == CustomSmartFolder.smartFolderID(for: selectedCustomFolderID)
-        {
-            selectedFolder = .all
-        }
-    }
-
-    private func deleteFolders(at offsets: IndexSet) {
-        let ids: [UUID] = offsets.compactMap { offset in
-            guard offset >= 0, offset < store.customFolders.count else {
-                return nil
-            }
-            return store.customFolders[offset].id
-        }
-
-        for id in ids {
-            store.removeFolder(id: id)
-            if case let .smartFolder(selectedID) = selectedFolder,
-               selectedID == CustomSmartFolder.smartFolderID(for: id)
-            {
-                selectedFolder = .all
-            }
-        }
     }
 
     private func ensureSelectionIsValid() {
@@ -166,32 +158,20 @@ struct SmartFolderManagerView: View {
         selectedCustomFolderID = store.customFolders.first?.id
     }
 
-    private func applyPreferredSelectionIfNeeded() {
-        guard !didApplyInitialSelection else {
-            return
-        }
-        didApplyInitialSelection = true
-
-        if let initialSelectedCustomFolderID,
-           store.customFolders.contains(where: { $0.id == initialSelectedCustomFolderID })
-        {
-            selectedCustomFolderID = initialSelectedCustomFolderID
+    private func applyPendingEditSelection() {
+        guard let pendingID = store.pendingEditFolderID else {
             return
         }
 
-        if case let .smartFolder(id) = selectedFolder,
-           let customID = CustomSmartFolder.customFolderID(from: id),
-           store.customFolders.contains(where: { $0.id == customID })
-        {
-            selectedCustomFolderID = customID
-            return
+        if store.customFolders.contains(where: { $0.id == pendingID }) {
+            selectedCustomFolderID = pendingID
         }
+        store.pendingEditFolderID = nil
     }
 }
 
 private struct SmartFolderEditor: View {
     @Binding var folder: CustomSmartFolder
-    let onDelete: () -> Void
 
     var body: some View {
         Form {
@@ -225,15 +205,8 @@ private struct SmartFolderEditor: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-
-            Section {
-                Button("Delete Smart List", role: .destructive) {
-                    onDelete()
-                }
-            }
         }
         .formStyle(.grouped)
-        .navigationTitle(folder.displayName)
     }
 
     private var hostnamesBinding: Binding<String> {
