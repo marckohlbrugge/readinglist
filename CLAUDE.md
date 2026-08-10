@@ -30,6 +30,7 @@ All source is in `Sources/ReadingList/`. Key layers:
 - **SmartFolders** — defines `SmartFolder`, `CustomSmartFolder`, `FolderSelection`, and `AddedDateFilter`. Smart folders match items by hostname set, keyword list, and date filter.
 - **ContentView** — three-column `NavigationSplitView`: sidebar (smart lists + domain folders), item list (with pagination at 250-item pages), and web preview pane.
 - **FaviconStore** — uses Nuke/NukeUI for favicon loading via Google's favicon service, with a 100 MB disk cache.
+- **UpdateChecker** — daily check against the GitHub releases API; shows an "Update Available" toolbar button linking to the release page. No auto-install. Skipped in demo mode and dev builds (no bundle version).
 
 ## Key Conventions
 

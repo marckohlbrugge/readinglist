@@ -6,6 +6,7 @@ struct ReadingListApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var accessManager = BookmarkAccessManager()
     @State private var smartFolderStore = SmartFolderStore()
+    @State private var updateChecker = UpdateChecker()
 
     private let isDemoMode = isDemoDataModeEnabled
 
@@ -21,6 +22,7 @@ struct ReadingListApp: App {
                 accessGatedView
                     .task {
                         accessManager.resolveAccess()
+                        updateChecker.startPeriodicChecks()
                     }
             }
         }
@@ -59,8 +61,12 @@ struct ReadingListApp: App {
         case .needsPermission, .failed:
             BookmarkAccessView(accessManager: accessManager)
         case let .ready(url):
-            MainContentWrapper(bookmarksPlistURL: url, smartFolderStore: smartFolderStore)
-                .id(url)
+            MainContentWrapper(
+                bookmarksPlistURL: url,
+                smartFolderStore: smartFolderStore,
+                updateChecker: updateChecker
+            )
+            .id(url)
         }
     }
 }

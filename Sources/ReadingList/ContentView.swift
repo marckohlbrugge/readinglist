@@ -4,6 +4,7 @@ import SwiftUI
 struct ContentView: View {
     @Bindable var viewModel: ReadingListViewModel
     var smartFolderStore: SmartFolderStore
+    var updateChecker: UpdateChecker?
     @Environment(\.openURL) private var openURL
     @Environment(\.openSettings) private var openSettings
     @AppStorage(AppSettingsKeys.isDeletionEnabled) private var isDeletionEnabled = false
@@ -179,6 +180,16 @@ struct ContentView: View {
     @ToolbarContentBuilder
     private var detailToolbarContent: some ToolbarContent {
         ToolbarItemGroup(placement: .automatic) {
+            if let update = updateChecker?.availableUpdate {
+                Button {
+                    openURL(update.releaseURL)
+                } label: {
+                    Label("Update Available", systemImage: "arrow.down.circle")
+                        .labelStyle(.titleAndIcon)
+                }
+                .help("Reading List \(update.version) is available — click to download")
+            }
+
             if viewModel.isLoading {
                 ProgressView()
                     .controlSize(.small)
