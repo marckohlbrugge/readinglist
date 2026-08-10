@@ -45,6 +45,13 @@ struct SafariReadingListService: Sendable {
         }.value
     }
 
+    /// Permanently removes the item from Safari's Reading List.
+    func deleteItem(url: URL, dateAdded: Date?) async throws {
+        try await Task.detached(priority: .userInitiated) { [self] in
+            try deleteItemSync(url: url, dateAdded: dateAdded)
+        }.value
+    }
+
     private func fetchItemsSync() throws -> [ReadingListItem] {
         let root = try loadPlistRoot()
 
@@ -68,6 +75,26 @@ struct SafariReadingListService: Sendable {
             viewedDate: viewedDate
         )
         guard didUpdate else {
+            throw ReadingListWriteError.itemNotFound(url)
+        }
+
+        let updatedData = try PropertyListSerialization.data(
+            fromPropertyList: root,
+            format: .binary,
+            options: 0
+        )
+        try updatedData.write(to: bookmarksPlistURL, options: .atomic)
+    }
+
+    private func deleteItemSync(url: URL, dateAdded: Date?) throws {
+        var root = try loadPlistRoot()
+
+        let didDelete = removeItem(
+            in: &root,
+            targetURLString: url.absoluteString,
+            targetDateAdded: dateAdded
+        )
+        guard didDelete else {
             throw ReadingListWriteError.itemNotFound(url)
         }
 
@@ -240,6 +267,55 @@ struct SafariReadingListService: Sendable {
                 targetURLString: targetURLString,
                 targetDateAdded: targetDateAdded,
                 viewedDate: viewedDate
+            ) {
+                children[index] = child
+                node["Children"] = children
+                return true
+            }
+        }
+
+        return false
+    }
+
+    private func removeItem(
+        in node: inout [String: Any],
+        targetURLString: String,
+        targetDateAdded: Date?
+    ) -> Bool {
+        if let title = node["Title"] as? String, title == "com.apple.ReadingList" {
+            guard var children = node["Children"] as? [[String: Any]] else {
+                return false
+            }
+
+            for index in children.indices {
+                guard let urlString = children[index]["URLString"] as? String,
+                      urlString == targetURLString
+                else {
+                    continue
+                }
+
+                guard matchesDateAdded(children[index], targetDateAdded: targetDateAdded) else {
+                    continue
+                }
+
+                children.remove(at: index)
+                node["Children"] = children
+                return true
+            }
+
+            return false
+        }
+
+        guard var children = node["Children"] as? [[String: Any]] else {
+            return false
+        }
+
+        for index in children.indices {
+            var child = children[index]
+            if removeItem(
+                in: &child,
+                targetURLString: targetURLString,
+                targetDateAdded: targetDateAdded
             ) {
                 children[index] = child
                 node["Children"] = children

@@ -2,7 +2,9 @@ import AppKit
 
 @MainActor
 enum BookmarksBackup {
-    static func promptAndSave(bookmarksPlistURL: URL) {
+    /// Returns `true` when a backup file was actually written.
+    @discardableResult
+    static func promptAndSave(bookmarksPlistURL: URL) -> Bool {
         let timestamp = Date().formatted(
             .iso8601.year().month().day().dateSeparator(.dash)
         )
@@ -12,14 +14,16 @@ enum BookmarksBackup {
         panel.directoryURL = FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask).first
         panel.canCreateDirectories = true
 
-        guard panel.runModal() == .OK, let destination = panel.url else { return }
+        guard panel.runModal() == .OK, let destination = panel.url else { return false }
 
         do {
             let data = try Data(contentsOf: bookmarksPlistURL)
             try data.write(to: destination, options: .atomic)
+            return true
         } catch {
             let alert = NSAlert(error: error)
             alert.runModal()
+            return false
         }
     }
 }

@@ -6,6 +6,7 @@ struct ContentView: View {
     var smartFolderStore: SmartFolderStore
     @Environment(\.openURL) private var openURL
     @Environment(\.openSettings) private var openSettings
+    @AppStorage(AppSettingsKeys.isDeletionEnabled) private var isDeletionEnabled = false
     @State private var pendingOpenURLs: [URL] = []
     @State private var pendingOpenLinksSourceName = ""
     @State private var isShowingOpenLinksConfirmation = false
@@ -155,6 +156,12 @@ struct ContentView: View {
                         return
                     }
                     viewModel.loadMoreItemsIfNeeded(currentItemID: id)
+                }
+                .onDeleteCommand {
+                    guard isDeletionEnabled, let item = viewModel.selectedItem else {
+                        return
+                    }
+                    viewModel.delete(item)
                 }
             }
         }
@@ -348,6 +355,17 @@ struct ContentView: View {
             )
         }
         .disabled(isUpdatingReadState)
+
+        if isDeletionEnabled {
+            Divider()
+
+            Button(role: .destructive) {
+                viewModel.delete(item)
+            } label: {
+                Label("Delete", systemImage: "trash")
+            }
+            .disabled(viewModel.deletingItemIDs.contains(item.id))
+        }
     }
 
     private func openAllLinksForDomain(_ hostname: String) {

@@ -203,6 +203,66 @@ struct SafariReadingListServiceTests {
         }
     }
 
+    @Test func deleteRemovesItem() async throws {
+        let added = Date(timeIntervalSinceReferenceDate: 700_000_000)
+        let url = try writeFixture(items: [
+            itemPayload(urlString: "https://example.com/delete-me", title: "Delete Me", dateAdded: added),
+            itemPayload(urlString: "https://example.com/keep-me", title: "Keep Me", dateAdded: added),
+        ])
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let service = SafariReadingListService(bookmarksPlistURL: url)
+        try await service.deleteItem(
+            url: URL(string: "https://example.com/delete-me")!,
+            dateAdded: added
+        )
+
+        let items = try await service.fetchItems()
+        #expect(items.map(\.title) == ["Keep Me"])
+    }
+
+    @Test func deleteDisambiguatesByDateAdded() async throws {
+        let older = Date(timeIntervalSinceReferenceDate: 600_000_000)
+        let newer = Date(timeIntervalSinceReferenceDate: 700_000_000)
+        let sharedURL = "https://example.com/shared"
+        let url = try writeFixture(items: [
+            itemPayload(urlString: sharedURL, title: "Newer Copy", dateAdded: newer),
+            itemPayload(urlString: sharedURL, title: "Older Copy", dateAdded: older),
+        ])
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let service = SafariReadingListService(bookmarksPlistURL: url)
+        try await service.deleteItem(url: URL(string: sharedURL)!, dateAdded: older)
+
+        let data = try Data(contentsOf: url)
+        let root = try #require(
+            try PropertyListSerialization.propertyList(from: data, options: [], format: nil) as? [String: Any]
+        )
+        let children = try #require(root["Children"] as? [[String: Any]])
+        let readingListNode = try #require(children.first)
+        let items = try #require(readingListNode["Children"] as? [[String: Any]])
+
+        #expect(items.count == 1)
+        let title = (items[0]["URIDictionary"] as? [String: Any])?["title"] as? String
+        #expect(title == "Newer Copy")
+    }
+
+    @Test func deleteThrowsWhenItemMissing() async throws {
+        let url = try writeFixture(items: [
+            itemPayload(urlString: "https://example.com/exists", title: "Exists"),
+        ])
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let service = SafariReadingListService(bookmarksPlistURL: url)
+
+        await #expect(throws: ReadingListWriteError.self) {
+            try await service.deleteItem(
+                url: URL(string: "https://example.com/missing")!,
+                dateAdded: nil
+            )
+        }
+    }
+
     @Test func fetchThrowsWhenFileMissing() async throws {
         let url = FileManager.default.temporaryDirectory
             .appending(path: "missing-\(UUID().uuidString).plist", directoryHint: .notDirectory)

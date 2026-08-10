@@ -7,6 +7,7 @@ final class ReadingListViewModel {
     private(set) var allItems: [ReadingListItem] = []
     private(set) var isLoading = false
     private(set) var updatingReadStateItemIDs: Set<ReadingListItem.ID> = []
+    private(set) var deletingItemIDs: Set<ReadingListItem.ID> = []
     var loadError: String?
 
     var selectedFolder: FolderSelection? = .all {
@@ -231,6 +232,44 @@ final class ReadingListViewModel {
         } else {
             markAsRead(item)
         }
+    }
+
+    func delete(_ item: ReadingListItem) {
+        guard !deletingItemIDs.contains(item.id) else {
+            return
+        }
+
+        deletingItemIDs.insert(item.id)
+
+        if isUsingDemoData {
+            defer {
+                deletingItemIDs.remove(item.id)
+            }
+            applyLocalDelete(itemID: item.id)
+            return
+        }
+
+        Task {
+            defer {
+                deletingItemIDs.remove(item.id)
+            }
+
+            do {
+                try await service.deleteItem(url: item.url, dateAdded: item.dateAdded)
+                applyLocalDelete(itemID: item.id)
+            } catch {
+                loadError = error.localizedDescription
+            }
+        }
+    }
+
+    private func applyLocalDelete(itemID: ReadingListItem.ID) {
+        guard let index = allItems.firstIndex(where: { $0.id == itemID }) else {
+            return
+        }
+
+        allItems.remove(at: index)
+        recomputeAllDerivedData(resetPagination: false)
     }
 
     private func setReadState(of item: ReadingListItem, viewedDate: Date?) {

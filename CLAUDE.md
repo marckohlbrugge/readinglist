@@ -21,7 +21,7 @@ The product name is `"Reading List"` (with a space); the SPM target is `ReadingL
 
 All source is in `Sources/ReadingList/`. Key layers:
 
-- **SafariReadingListService** — reads/writes Safari's `Bookmarks.plist` (binary plist parsing, no Apple API). Handles fetch, mark-read, mark-unread. This is a `Sendable` struct; heavy work runs on detached tasks.
+- **SafariReadingListService** — reads/writes Safari's `Bookmarks.plist` (binary plist parsing, no Apple API). Handles fetch, mark-read, mark-unread, and delete. This is a `Sendable` struct; heavy work runs on detached tasks.
 - **BookmarkAccessManager** — manages App Sandbox security-scoped bookmark access to the plist. Uses `NSOpenPanel` file picker on first launch; persists access via `UserDefaults` bookmark data.
 - **ReadingListViewModel** — `@MainActor @Observable` class driving the UI. Owns all items plus the UI state (folder selection, search query, read-status filter `Unread` / `All` / `Viewed`, sort order `Newest First` / `Oldest First`, pagination, selected item) and recomputes derived data via `didSet` observers. Status filter and sort order persist to `UserDefaults`.
 - **BookmarksFileMonitor** — DispatchSource-based watcher on `Bookmarks.plist` that auto-reloads the view model when Safari (or anything else) changes the file; re-arms after atomic replaces.
@@ -36,5 +36,5 @@ All source is in `Sources/ReadingList/`. Key layers:
 - Swift 6 strict concurrency; `@MainActor` on view models and stores, `Sendable` on services and models.
 - macOS 14+ minimum deployment target.
 - Demo mode (`--demo-data` flag or `READING_LIST_DEMO=1` env var) uses `DemoReadingListData` — no file system access.
-- Read-status writes go directly to Safari's `Bookmarks.plist` (atomic write). This is the only write operation.
+- Writes (read-status changes and item deletion) go directly to Safari's `Bookmarks.plist` (atomic write). Deletion is opt-in via Settings → Advanced (`AppSettingsKeys.isDeletionEnabled`, off by default) and prompts the user to back up first when enabling.
 - `ReadingListItem.id` is a composite of URL + dateAdded timestamp to handle duplicate URLs.
