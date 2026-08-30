@@ -221,6 +221,35 @@ struct SafariReadingListServiceTests {
         #expect(items.map(\.title) == ["Keep Me"])
     }
 
+    @Test func concurrentDeletesDoNotResurrectItems() async throws {
+        let added = Date(timeIntervalSinceReferenceDate: 700_000_000)
+        let itemCount = 10
+        let url = try writeFixture(items: (0 ..< itemCount).map { index in
+            itemPayload(
+                urlString: "https://example.com/item-\(index)",
+                title: "Item \(index)",
+                dateAdded: added
+            )
+        })
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let service = SafariReadingListService(bookmarksPlistURL: url)
+        try await withThrowingTaskGroup(of: Void.self) { group in
+            for index in 0 ..< itemCount {
+                group.addTask {
+                    try await service.deleteItem(
+                        url: URL(string: "https://example.com/item-\(index)")!,
+                        dateAdded: added
+                    )
+                }
+            }
+            try await group.waitForAll()
+        }
+
+        let remaining = try await service.fetchItems()
+        #expect(remaining.isEmpty)
+    }
+
     @Test func deleteDisambiguatesByDateAdded() async throws {
         let older = Date(timeIntervalSinceReferenceDate: 600_000_000)
         let newer = Date(timeIntervalSinceReferenceDate: 700_000_000)

@@ -28,6 +28,12 @@ enum ReadingListWriteError: LocalizedError {
 struct SafariReadingListService: Sendable {
     let bookmarksPlistURL: URL
 
+    /// Every mutation is a read-modify-write of the whole plist. If two run
+    /// concurrently they both start from the same snapshot and the later write
+    /// silently undoes the earlier one (e.g. resurrecting a deleted item), so
+    /// all writes are funneled through a single serial queue.
+    private static let writeQueue = DispatchQueue(label: "ReadingListService.plist-writes")
+
     init(bookmarksPlistURL: URL) {
         self.bookmarksPlistURL = bookmarksPlistURL
     }
@@ -40,16 +46,24 @@ struct SafariReadingListService: Sendable {
 
     /// Passing a `viewedDate` marks the item as read; passing `nil` marks it as unread.
     func setReadState(url: URL, dateAdded: Date?, viewedDate: Date?) async throws {
-        try await Task.detached(priority: .userInitiated) { [self] in
+        try await performWrite { [self] in
             try setReadStateSync(url: url, dateAdded: dateAdded, viewedDate: viewedDate)
-        }.value
+        }
     }
 
     /// Permanently removes the item from Safari's Reading List.
     func deleteItem(url: URL, dateAdded: Date?) async throws {
-        try await Task.detached(priority: .userInitiated) { [self] in
+        try await performWrite { [self] in
             try deleteItemSync(url: url, dateAdded: dateAdded)
-        }.value
+        }
+    }
+
+    private func performWrite(_ work: @escaping @Sendable () throws -> Void) async throws {
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, any Error>) in
+            Self.writeQueue.async {
+                continuation.resume(with: Result(catching: work))
+            }
+        }
     }
 
     private func fetchItemsSync() throws -> [ReadingListItem] {
