@@ -70,21 +70,6 @@ This triggers the GitHub Actions workflow which will:
 4. Create a DMG and ZIP
 5. Publish a GitHub Release with both artifacts
 
-## Building locally (optional)
-
-To build a signed and notarized release on your own machine:
-
-```bash
-export DEVELOPER_ID_APPLICATION="Developer ID Application: Your Name (TEAM123)"
-export APPLE_ID="your@email.com"
-export APPLE_ID_PASSWORD="xxxx-xxxx-xxxx-xxxx"
-export TEAM_ID="TEAM123"
-
-./scripts/build-release.sh
-```
-
-Artifacts are written to `.build/Reading-List-<version>.dmg` and `.build/Reading-List-<version>.zip`.
-
 ## What users get
 
 Users download the DMG, open it, and drag "Reading List" to their Applications folder. Because the app is signed and notarized, macOS Gatekeeper will allow it to run without security warnings.
