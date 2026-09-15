@@ -17,7 +17,7 @@ Download the latest version from the [GitHub Releases](../../releases/latest) pa
 
 The app is signed and notarized with Apple, so macOS will allow it to run without security warnings.
 
-**Requirements:** macOS 14 (Sonoma) or later.
+**Requirements:** macOS 14 (Sonoma) or later. Universal binary, so it runs on both Apple Silicon and Intel Macs.
 
 On first launch, the app asks you to select your `~/Library/Safari/Bookmarks.plist` file. You only need to do this once.
 
