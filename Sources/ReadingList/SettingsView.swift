@@ -4,11 +4,7 @@ struct SettingsView: View {
     var store: SmartFolderStore
     var accessManager: BookmarkAccessManager
 
-    private enum SettingsTab: Hashable {
-        case general
-        case smartLists
-        case advanced
-    }
+    private let router = SettingsRouter.shared
 
     @State private var selectedTab: SettingsTab = .general
 
@@ -33,14 +29,23 @@ struct SettingsView: View {
                 .tag(SettingsTab.advanced)
         }
         .onAppear {
-            if store.pendingEditFolderID != nil {
-                selectedTab = .smartLists
-            }
+            applyPendingNavigation()
         }
         .onChange(of: store.pendingEditFolderID) {
-            if store.pendingEditFolderID != nil {
-                selectedTab = .smartLists
-            }
+            applyPendingNavigation()
+        }
+        .onChange(of: router.pendingTab) {
+            applyPendingNavigation()
+        }
+    }
+
+    private func applyPendingNavigation() {
+        if store.pendingEditFolderID != nil {
+            selectedTab = .smartLists
+        }
+        if let tab = router.pendingTab {
+            selectedTab = tab
+            router.pendingTab = nil
         }
     }
 }
@@ -108,7 +113,7 @@ private struct AdvancedSettingsView: View {
                 Toggle("Allow deleting items", isOn: deletionToggleBinding)
 
                 Text(
-                    "Adds a Delete option to items in your reading list. " +
+                    "Lets you delete items with the Delete key or the Delete menu. " +
                         "Deleted items are removed from Safari's Reading List on all your devices, " +
                         "and this app can't restore them — so it's worth keeping a recent backup."
                 )

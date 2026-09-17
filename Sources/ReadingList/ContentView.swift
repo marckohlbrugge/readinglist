@@ -11,6 +11,8 @@ struct ContentView: View {
     @State private var pendingOpenURLs: [URL] = []
     @State private var pendingOpenLinksSourceName = ""
     @State private var isShowingOpenLinksConfirmation = false
+    @State private var isShowingDeletionDisabledAlert = false
+    @FocusState private var isItemListFocused: Bool
     private let openLinksConfirmationThreshold = 15
 
     var body: some View {
@@ -46,6 +48,18 @@ struct ContentView: View {
             }
         } message: {
             Text("This can open many tabs for \(pendingOpenLinksSourceName).")
+        }
+        .alert("Deleting Is Turned Off", isPresented: $isShowingDeletionDisabledAlert) {
+            Button("Open Settings") {
+                SettingsRouter.shared.pendingTab = .advanced
+                openSettings()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(
+                "Deleting removes items from Safari's Reading List on all your devices, " +
+                    "so it's off by default. You can turn it on in Settings → Advanced."
+            )
         }
     }
 
@@ -158,11 +172,17 @@ struct ContentView: View {
                     }
                     viewModel.loadMoreItemsIfNeeded(currentItemID: id)
                 }
+                .focused($isItemListFocused)
                 .onDeleteCommand {
-                    guard isDeletionEnabled, let item = viewModel.selectedItem else {
-                        return
+                    deleteSelectedItem()
+                }
+                // Delete (⌫) arrives via onDeleteCommand; Forward Delete (⌦) doesn't.
+                .onKeyPress(.deleteForward) {
+                    guard viewModel.selectedItem != nil else {
+                        return .ignored
                     }
-                    viewModel.delete(item)
+                    deleteSelectedItem()
+                    return .handled
                 }
             }
         }
@@ -367,15 +387,39 @@ struct ContentView: View {
         }
         .disabled(isUpdatingReadState)
 
-        if isDeletionEnabled {
-            Divider()
+        Divider()
 
-            Button(role: .destructive) {
-                viewModel.delete(item)
-            } label: {
-                Label("Delete", systemImage: "trash")
+        Button(role: .destructive) {
+            requestDelete(item)
+        } label: {
+            Label(isDeletionEnabled ? "Delete" : "Delete\u{2026}", systemImage: "trash")
+        }
+        .disabled(viewModel.deletingItemIDs.contains(item.id))
+    }
+
+    /// Deletes the selected item, or explains how to enable deleting if it's off.
+    private func deleteSelectedItem() {
+        guard let item = viewModel.selectedItem else {
+            return
+        }
+        requestDelete(item)
+    }
+
+    private func requestDelete(_ item: ReadingListItem) {
+        guard isDeletionEnabled else {
+            isShowingDeletionDisabledAlert = true
+            return
+        }
+
+        let hadListFocus = isItemListFocused
+        viewModel.delete(item)
+
+        // Removing the selected row makes AppKit drop first responder, so a
+        // follow-up Delete keypress would go nowhere. Hand focus back to the list.
+        if hadListFocus {
+            Task { @MainActor in
+                isItemListFocused = true
             }
-            .disabled(viewModel.deletingItemIDs.contains(item.id))
         }
     }
 

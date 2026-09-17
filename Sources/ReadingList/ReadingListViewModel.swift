@@ -268,8 +268,34 @@ final class ReadingListViewModel {
             return
         }
 
+        let replacementSelectionID = selectedItemID == itemID
+            ? neighborItemID(of: itemID)
+            : nil
+
         allItems.remove(at: index)
         recomputeAllDerivedData(resetPagination: false)
+
+        if let replacementSelectionID,
+           filteredItems.contains(where: { $0.id == replacementSelectionID })
+        {
+            selectedItemID = replacementSelectionID
+        }
+    }
+
+    /// The item that should take over selection when `itemID` is removed:
+    /// the one below it in the current list, or the one above if it was last.
+    private func neighborItemID(of itemID: ReadingListItem.ID) -> ReadingListItem.ID? {
+        guard let index = filteredItems.firstIndex(where: { $0.id == itemID }) else {
+            return nil
+        }
+
+        if index + 1 < filteredItems.count {
+            return filteredItems[index + 1].id
+        }
+        if index > 0 {
+            return filteredItems[index - 1].id
+        }
+        return nil
     }
 
     private func setReadState(of item: ReadingListItem, viewedDate: Date?) {
