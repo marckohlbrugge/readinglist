@@ -51,6 +51,7 @@ The UI is partly inspired by NetNewsWire and follows traditional macOS design pa
 - Remembers your status filter and sort order between launches
 - Shows favicons in sidebar and list rows
 - Includes a built-in preview pane and quick actions to open links in Safari
+- Offers a reader mode (⇧⌘R) that strips a page down to just the article, using Mozilla's Readability
 - Includes right-click context menus for common actions (open, copy link, mark read/unread, etc.)
 
 ## Safety and data notes

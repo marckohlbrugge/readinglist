@@ -8,6 +8,7 @@ struct ContentView: View {
     @Environment(\.openURL) private var openURL
     @Environment(\.openSettings) private var openSettings
     @AppStorage(AppSettingsKeys.isDeletionEnabled) private var isDeletionEnabled = false
+    @AppStorage(AppSettingsKeys.isReaderModeEnabled) private var isReaderModeEnabled = false
     @State private var pendingOpenURLs: [URL] = []
     @State private var pendingOpenLinksSourceName = ""
     @State private var isShowingOpenLinksConfirmation = false
@@ -287,6 +288,16 @@ struct ContentView: View {
                         .accessibilityLabel(selectedItem.isViewed ? "Mark as Unread" : "Mark as Read")
                         .help(selectedItem.isViewed ? "Mark as unread (⇧⌘U)" : "Mark as read (⇧⌘U)")
 
+                        Toggle(isOn: $isReaderModeEnabled) {
+                            Label("Reader Mode", systemImage: "doc.plaintext")
+                                .labelStyle(.iconOnly)
+                        }
+                        .toggleStyle(.button)
+                        .controlSize(.regular)
+                        .keyboardShortcut("r", modifiers: [.command, .shift])
+                        .accessibilityLabel(isReaderModeEnabled ? "Hide Reader" : "Show Reader")
+                        .help(isReaderModeEnabled ? "Hide reader (⇧⌘R)" : "Show reader (⇧⌘R)")
+
                         Button {
                             openURL(selectedItem.url)
                         } label: {
@@ -303,7 +314,7 @@ struct ContentView: View {
 
                     Divider()
 
-                    WebPreviewView(url: selectedItem.url)
+                    ArticlePreviewView(url: selectedItem.url, isReaderModeEnabled: isReaderModeEnabled)
                 }
             } else {
                 VStack(spacing: 12) {
