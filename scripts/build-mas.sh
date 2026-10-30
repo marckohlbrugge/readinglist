@@ -75,10 +75,11 @@ build_app() {
             ;;
     esac
 
-    swift build -c release "${arch_flags[@]}"
+    # App Store builds can't self-update, so leave out the Sparkle updater
+    swift build -c release --disable-default-traits "${arch_flags[@]}"
 
     local bin_path
-    bin_path="$(swift build -c release --show-bin-path)"
+    bin_path="$(swift build -c release --disable-default-traits "${arch_flags[@]}" --show-bin-path)"
     local executable="$bin_path/$APP_NAME"
 
     if [[ ! -f "$executable" ]]; then
@@ -110,6 +111,11 @@ build_app() {
     local build_number
     build_number="$(date +%Y%m%d%H%M%S)"
     /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $build_number" "$plist"
+
+    local sparkle_key
+    for sparkle_key in SUAutomaticallyUpdate SUEnableAutomaticChecks SUEnableInstallerLauncherService SUFeedURL SUPublicEDKey; do
+        /usr/libexec/PlistBuddy -c "Delete :$sparkle_key" "$plist"
+    done
 
     info "App bundle assembled at $app_bundle"
 }

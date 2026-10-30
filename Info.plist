@@ -33,5 +33,15 @@
 	<true/>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
+	<key>SUAutomaticallyUpdate</key>
+	<true/>
+	<key>SUEnableAutomaticChecks</key>
+	<true/>
+	<key>SUEnableInstallerLauncherService</key>
+	<true/>
+	<key>SUFeedURL</key>
+	<string>https://github.com/marckohlbrugge/readinglist/releases/latest/download/appcast.xml</string>
+	<key>SUPublicEDKey</key>
+	<string>LFLWNFEf/1atGHfAEnIwh60kO6p/HBeaYG4QRp6hyEk=</string>
 </dict>
 </plist>

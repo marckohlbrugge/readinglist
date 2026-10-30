@@ -31,7 +31,7 @@ All source is in `Sources/ReadingList/`. Key layers:
 - **ContentView** — three-column `NavigationSplitView`: sidebar (smart lists + domain folders), item list (with pagination at 250-item pages), and web preview pane.
 - **WebPreviewView / ArticlePreviewView** — `WKWebView` preview with reader mode (⇧⌘R, persisted in `UserDefaults`). Mozilla Readability.js (vendored as a Swift string in `ReadabilityScript.swift`, since release builds don't ship SwiftPM resource bundles) runs in an isolated content world once the DOM is ready, retrying after load finishes; the extracted `ReaderArticle` is shown via `loadHTMLString` with JavaScript disabled, and links in it open in the browser.
 - **FaviconStore** — uses Nuke/NukeUI for favicon loading via Google's favicon service, with a 100 MB disk cache.
-- **UpdateChecker** — daily check against the GitHub releases API; shows an "Update Available" toolbar button linking to the release page. No auto-install. Skipped in demo mode and dev builds (no bundle version).
+- **AppUpdater** — wraps Sparkle 2 (`SPUStandardUpdaterController`). Checks `appcast.xml` from the latest GitHub release daily, then downloads, verifies (EdDSA), and installs updates on quit; "Check for Updates…" in the app menu, toggles in Settings → General. Compiled only with the `SparkleUpdates` package trait (on by default; the Mac App Store build passes `--disable-default-traits`). Not started in demo mode or dev builds (no bundle version). The release workflow embeds and signs `Sparkle.framework` and generates the appcast; see RELEASING.md.
 
 ## Key Conventions
 

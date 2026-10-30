@@ -6,7 +6,9 @@ struct ReadingListApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var accessManager = BookmarkAccessManager()
     @State private var smartFolderStore = SmartFolderStore()
-    @State private var updateChecker = UpdateChecker()
+    #if SparkleUpdates
+        @State private var appUpdater = AppUpdater()
+    #endif
 
     private let isDemoMode = isDemoDataModeEnabled
 
@@ -22,7 +24,9 @@ struct ReadingListApp: App {
                 accessGatedView
                     .task {
                         accessManager.resolveAccess()
-                        updateChecker.startPeriodicChecks()
+                        #if SparkleUpdates
+                            appUpdater.start()
+                        #endif
                     }
             }
         }
@@ -30,6 +34,14 @@ struct ReadingListApp: App {
         .windowResizability(.contentMinSize)
         .windowStyle(.hiddenTitleBar)
         .commands {
+            #if SparkleUpdates
+                CommandGroup(after: .appInfo) {
+                    Button("Check for Updates\u{2026}") {
+                        appUpdater.checkForUpdates()
+                    }
+                    .disabled(!appUpdater.canCheckForUpdates)
+                }
+            #endif
             CommandGroup(after: .textEditing) {
                 Button("Find...") {
                     ToolbarSearchFieldFocus.focusInActiveWindow()
@@ -47,7 +59,11 @@ struct ReadingListApp: App {
         }
 
         Settings {
-            SettingsView(store: smartFolderStore, accessManager: accessManager)
+            #if SparkleUpdates
+                SettingsView(store: smartFolderStore, accessManager: accessManager, appUpdater: appUpdater)
+            #else
+                SettingsView(store: smartFolderStore, accessManager: accessManager)
+            #endif
         }
         .windowResizability(.contentSize)
     }
@@ -63,8 +79,7 @@ struct ReadingListApp: App {
         case let .ready(url):
             MainContentWrapper(
                 bookmarksPlistURL: url,
-                smartFolderStore: smartFolderStore,
-                updateChecker: updateChecker
+                smartFolderStore: smartFolderStore
             )
             .id(url)
         }

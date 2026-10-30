@@ -3,6 +3,9 @@ import SwiftUI
 struct SettingsView: View {
     var store: SmartFolderStore
     var accessManager: BookmarkAccessManager
+    #if SparkleUpdates
+        var appUpdater: AppUpdater
+    #endif
 
     private let router = SettingsRouter.shared
 
@@ -10,7 +13,7 @@ struct SettingsView: View {
 
     var body: some View {
         TabView(selection: $selectedTab) {
-            GeneralSettingsView(accessManager: accessManager)
+            generalSettings
                 .tabItem {
                     Label("General", systemImage: "gearshape")
                 }
@@ -39,6 +42,14 @@ struct SettingsView: View {
         }
     }
 
+    private var generalSettings: some View {
+        #if SparkleUpdates
+            GeneralSettingsView(accessManager: accessManager, appUpdater: appUpdater)
+        #else
+            GeneralSettingsView(accessManager: accessManager)
+        #endif
+    }
+
     private func applyPendingNavigation() {
         if store.pendingEditFolderID != nil {
             selectedTab = .smartLists
@@ -52,6 +63,9 @@ struct SettingsView: View {
 
 private struct GeneralSettingsView: View {
     var accessManager: BookmarkAccessManager
+    #if SparkleUpdates
+        @Bindable var appUpdater: AppUpdater
+    #endif
 
     var body: some View {
         Form {
@@ -82,9 +96,31 @@ private struct GeneralSettingsView: View {
                     }
                 }
             }
+
+            #if SparkleUpdates
+                Section("Updates") {
+                    Toggle("Check for updates automatically", isOn: $appUpdater.automaticallyChecksForUpdates)
+
+                    Toggle("Download and install updates automatically", isOn: $appUpdater.automaticallyDownloadsUpdates)
+                        .disabled(!appUpdater.automaticallyChecksForUpdates)
+
+                    Button("Check Now") {
+                        appUpdater.checkForUpdates()
+                    }
+                    .disabled(!appUpdater.canCheckForUpdates)
+                }
+            #endif
         }
         .formStyle(.grouped)
-        .frame(width: 640, height: 180)
+        .frame(width: 640, height: generalHeight)
+    }
+
+    private var generalHeight: CGFloat {
+        #if SparkleUpdates
+            340
+        #else
+            180
+        #endif
     }
 
     private var filePathDescription: String {

@@ -15,6 +15,8 @@ jobs:
     env:
       APP_BUNDLE: Reading List.app
       ARCH_FLAGS: --arch arm64 --arch x86_64
+      SPARKLE_FRAMEWORK: .build/artifacts/sparkle/Sparkle/Sparkle.xcframework/macos-arm64_x86_64/Sparkle.framework
+      SPARKLE_BIN: .build/artifacts/sparkle/Sparkle/bin
     steps:
       - name: Select Xcode
         run: sudo xcode-select -s /Applications/Xcode_26.3.app
@@ -89,8 +91,15 @@ jobs:
           # Assemble .app bundle
           mkdir -p "$APP_BUNDLE/Contents/MacOS"
           mkdir -p "$APP_BUNDLE/Contents/Resources"
+          mkdir -p "$APP_BUNDLE/Contents/Frameworks"
           cp "$EXECUTABLE" "$APP_BUNDLE/Contents/MacOS/Reading List"
           cp Info.plist "$APP_BUNDLE/Contents/Info.plist"
+
+          # Embed Sparkle. The app has the network client entitlement, so
+          # Sparkle's optional Downloader XPC service isn't needed.
+          ditto "$SPARKLE_FRAMEWORK" "$APP_BUNDLE/Contents/Frameworks/Sparkle.framework"
+          rm -rf "$APP_BUNDLE/Contents/Frameworks/Sparkle.framework/Versions/B/XPCServices/Downloader.xpc"
+          install_name_tool -add_rpath "@executable_path/../Frameworks" "$APP_BUNDLE/Contents/MacOS/Reading List"
 
           # Copy pre-compiled icon assets (built locally via actool from AppIcon.icon)
           cp Resources/AppIcon.icns "$APP_BUNDLE/Contents/Resources/AppIcon.icns"
@@ -108,6 +117,16 @@ jobs:
         env:
           DEVELOPER_ID_APPLICATION: ${{ secrets.DEVELOPER_ID_APPLICATION }}
         run: |
+          # Sign Sparkle's nested executables inside-out before the app itself
+          SPARKLE="$APP_BUNDLE/Contents/Frameworks/Sparkle.framework"
+          for item in \
+            "$SPARKLE/Versions/B/XPCServices/Installer.xpc" \
+            "$SPARKLE/Versions/B/Autoupdate" \
+            "$SPARKLE/Versions/B/Updater.app" \
+            "$SPARKLE"; do
+            codesign --force --sign "$DEVELOPER_ID_APPLICATION" --options runtime --timestamp "$item"
+          done
+
           codesign --force \
             --sign "$DEVELOPER_ID_APPLICATION" \
             --entitlements Entitlements.plist \
@@ -115,7 +134,7 @@ jobs:
             --timestamp \
             "$APP_BUNDLE"
 
-          codesign --verify --strict "$APP_BUNDLE"
+          codesign --verify --deep --strict "$APP_BUNDLE"
 
       - name: Notarize app
         env:
@@ -159,6 +178,49 @@ jobs:
         run: |
           ditto -c -k --keepParent "$APP_BUNDLE" "Reading-List-${VERSION}.zip"
 
+      - name: Generate release notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY/releases/generate-notes" \
+            -f tag_name="$GITHUB_REF_NAME" --jq .body > release-notes.md
+          gh api markdown -f text="$(cat release-notes.md)" -f mode=gfm \
+            -f context="$GITHUB_REPOSITORY" > release-notes.html
+
+      # The in-app updater reads the appcast from the latest release:
+      # https://github.com/<repo>/releases/latest/download/appcast.xml
+      - name: Create Sparkle appcast
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
+        run: |
+          ZIP="Reading-List-${VERSION}.zip"
+          SIGNATURE="$(echo "$SPARKLE_ED_PRIVATE_KEY" | "$SPARKLE_BIN/sign_update" --ed-key-file - "$ZIP")"
+          BUILD_NUMBER="$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$APP_BUNDLE/Contents/Info.plist")"
+          RELEASE_URL="https://github.com/$GITHUB_REPOSITORY/releases"
+
+          cat > appcast.xml <<EOF
+          <?xml version="1.0" encoding="utf-8"?>
+          <rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+            <channel>
+              <title>Reading List</title>
+              <item>
+                <title>Version ${VERSION}</title>
+                <pubDate>$(LC_ALL=C date -u "+%a, %d %b %Y %H:%M:%S +0000")</pubDate>
+                <sparkle:version>${BUILD_NUMBER}</sparkle:version>
+                <sparkle:shortVersionString>${VERSION}</sparkle:shortVersionString>
+                <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+                <sparkle:fullReleaseNotesLink>${RELEASE_URL}/tag/${GITHUB_REF_NAME}</sparkle:fullReleaseNotesLink>
+                <description><![CDATA[$(cat release-notes.html)]]></description>
+                <enclosure url="${RELEASE_URL}/download/${GITHUB_REF_NAME}/${ZIP}" type="application/octet-stream" ${SIGNATURE} />
+              </item>
+            </channel>
+          </rss>
+          EOF
+
+          xmllint --noout appcast.xml
+          cat appcast.xml
+
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -166,9 +228,10 @@ jobs:
         run: |
           gh release create "$GITHUB_REF_NAME" \
             --title "Reading List v${VERSION}" \
-            --generate-notes \
+            --notes-file release-notes.md \
             "Reading-List-${VERSION}.dmg#Reading List ${VERSION} (DMG)" \
-            "Reading-List-${VERSION}.zip#Reading List ${VERSION} (ZIP)"
+            "Reading-List-${VERSION}.zip#Reading List ${VERSION} (ZIP)" \
+            appcast.xml
 
       - name: Cleanup keychain
         if: always()

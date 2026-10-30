@@ -52,6 +52,16 @@ Go to your repo's **Settings > Secrets and variables > Actions** and add:
 | `APPLE_ID` | Your Apple ID email |
 | `APPLE_ID_PASSWORD` | App-specific password from step 3 |
 | `TEAM_ID` | Your 10-character Team ID |
+| `SPARKLE_ED_PRIVATE_KEY` | Sparkle update-signing key (see step 7) |
+
+### 7. Sparkle update-signing key
+
+In-app updates are verified with an EdDSA key. The public half is `SUPublicEDKey` in `Info.plist`; the private half lives in the login keychain (account `com.killbridge.ReadingList`) and in the `SPARKLE_ED_PRIVATE_KEY` secret. If the private key is lost, installed copies can no longer update themselves, so keep a backup. Export it with:
+
+```bash
+swift package resolve
+.build/artifacts/sparkle/Sparkle/bin/generate_keys --account com.killbridge.ReadingList -x sparkle-private-key.txt
+```
 
 ## Creating a release
 
@@ -68,10 +78,13 @@ This triggers the GitHub Actions workflow which will:
 2. Sign with your Developer ID certificate
 3. Notarize with Apple
 4. Create a DMG and ZIP
-5. Publish a GitHub Release with both artifacts
+5. Sign the ZIP with the Sparkle key and write `appcast.xml` (with the release notes)
+6. Publish a GitHub Release with the DMG, ZIP, and appcast
 
 ## What users get
 
 Users download the DMG, open it, and drag "Reading List" to their Applications folder. Because the app is signed and notarized, macOS Gatekeeper will allow it to run without security warnings.
+
+After that, the app updates itself: Sparkle reads `https://github.com/marckohlbrugge/readinglist/releases/latest/download/appcast.xml` once a day, downloads the new ZIP in the background, and installs it when the app quits. Only the newest release's appcast is ever read, so don't mark a release as "latest" unless it has an `appcast.xml`.
 
 On first launch, the app asks the user to select their `~/Library/Safari/Bookmarks.plist` file via a standard file picker (required for sandbox access).

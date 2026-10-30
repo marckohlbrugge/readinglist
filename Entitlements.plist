@@ -8,5 +8,10 @@
 	<true/>
 	<key>com.apple.security.network.client</key>
 	<true/>
+	<key>com.apple.security.temporary-exception.mach-lookup.global-name</key>
+	<array>
+		<string>com.killbridge.ReadingList-spks</string>
+		<string>com.killbridge.ReadingList-spki</string>
+	</array>
 </dict>
 </plist>
